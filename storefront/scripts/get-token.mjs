@@ -4,7 +4,8 @@
 // as the account the storefront should act as (e.g. kepleragentteam@todaq.net), and
 // prints the client id + refresh token to store as Worker secrets.
 //
-//   node scripts/get-token.mjs
+//   node scripts/get-token.mjs           prints the two secret commands
+//   node scripts/get-token.mjs --apply   stores them on the deployed Worker (used by deploy.sh)
 //
 // The storefront only ever calls catalog_search and guest_checkout. Guest checkout is
 // paid by the buyer on Qatom's checkout page, so this account's wallet is never spent.
@@ -13,7 +14,7 @@
 
 import http from "node:http";
 import crypto from "node:crypto";
-import { exec } from "node:child_process";
+import { exec, spawnSync } from "node:child_process";
 
 const AS = "https://pay.m.todaq.net";
 const RESOURCE = "https://mcp.m.todaq.net";
@@ -103,10 +104,23 @@ async function main() {
     console.log("\n! No refresh token was issued, so the Worker can only use this access token until it expires " +
       `(${tok.expires_in}s). Ask Matthew to allow offline_access/refresh tokens for this client, or set\n  QATOM_MCP_TOKEN=${tok.access_token}`);
   }
+  if (process.argv.includes("--apply")) {
+    // Store the secrets on the deployed Worker directly (values go over stdin, never on screen).
+    putSecret("QATOM_CLIENT_ID", reg.client_id);
+    if (tok.refresh_token) putSecret("QATOM_REFRESH_TOKEN", tok.refresh_token);
+    else putSecret("QATOM_MCP_TOKEN", tok.access_token);
+    console.log(`\n✓ Secrets stored on the Worker. To revoke the sign-in later: ${meta.revocation_endpoint}\n`);
+    return;
+  }
   console.log(`\nStore these as Worker secrets (run in the storefront folder):\n
   printf '%s' '${reg.client_id}' | npx wrangler secret put QATOM_CLIENT_ID
   printf '%s' '${tok.refresh_token || ""}' | npx wrangler secret put QATOM_REFRESH_TOKEN
 \nKeep the refresh token private. To revoke it later: ${meta.revocation_endpoint}\n`);
+}
+
+function putSecret(name, value) {
+  const r = spawnSync("npx", ["wrangler", "secret", "put", name], { input: value, stdio: ["pipe", "inherit", "inherit"], shell: process.platform === "win32" });
+  if (r.status !== 0) throw new Error(`could not store ${name} (wrangler exit ${r.status})`);
 }
 
 async function checkMcp(token) {

@@ -35,7 +35,7 @@ Then ask your agent: *"Find me something on Qatom for…"* or *"Help me try a $1
 - Card payments start at $0.50. Items that cost less, including the many priced at a fraction of a cent per call, go into a Qatom cart and are paid together once the total reaches $0.50. No checkout link is issued below that.
 - Inputs are checked against each item's own schema before a checkout is created. Personal details go through a form, not a link.
 
-`cd storefront && npm install && npm test` runs 39 checks against a mocked Qatom loaded with a snapshot of the live catalog.
+Deploy with `bash storefront/scripts/deploy.sh` (steps in the [storefront README](storefront/README.md)). `cd storefront && npm install && npm test` runs 39 checks against a mocked Qatom loaded with a snapshot of the live catalog.
 
 ## Money safety
 
