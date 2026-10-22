@@ -33,22 +33,25 @@ page; this Worker never spends money and never sees card details.
 | `/llms.txt`, `/catalog.txt` | Plain text for AI readers |
 | `/health` | Catalog reachable + item count |
 
-## Deploy (about 10 minutes)
+## Deploy (about 5 minutes)
 
-On the Cloudflare account that holds the agentkepler.tech zone (hassan.khan@todaqfinance.com):
+On a Mac or Linux machine with Node 20+, signed in to the Cloudflare account that holds
+the agentkepler.tech zone (hassan.khan@todaqfinance.com):
 
 ```sh
-npm install
-npx wrangler login
-npx wrangler kv namespace create TOKENS      # paste the id into wrangler.toml
-node scripts/get-token.mjs                  # sign in as the service account; prints two secret commands
-#   run the two printed commands (QATOM_CLIENT_ID, QATOM_REFRESH_TOKEN)
-npm run deploy                              # creates try.agentkepler.tech as a custom domain
-curl https://try.agentkepler.tech/health    # expect {"ok":true,"items":…}
+git clone https://github.com/StarwaterHeaven/Qatom-Consumer
+bash Qatom-Consumer/storefront/scripts/deploy.sh
 ```
 
-Use a dedicated account (e.g. kepleragentteam@todaq.net) whose agent wallet is
-empty. Guest checkout doesn't touch it, so even a leaked token can't spend.
+It installs the tools, signs in to Cloudflare if needed, creates the token store,
+deploys the Worker to try.agentkepler.tech, then opens your browser once so the
+storefront can sign in to Qatom. Sign in as a dedicated account whose agent wallet
+is empty (e.g. kepleragentteam@todaq.net): guest checkout never touches it, so even a
+leaked token can't spend. It finishes by checking `/health`. Safe to re-run.
+
+If the deploy says try.agentkepler.tech already has a DNS record, delete that record
+in Cloudflare (DNS for agentkepler.tech) and run the script again; the Worker creates
+its own.
 
 Before anything else, check **Security > Bots / AI Crawl Control** on the zone:
 if AI bots are blocked zone-wide, Claude and ChatGPT will be refused at the edge
