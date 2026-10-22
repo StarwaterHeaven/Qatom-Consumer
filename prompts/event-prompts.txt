@@ -1,20 +1,21 @@
 QATOM — TRY IT IN A MINUTE
 Copy the block for their AI, text or message it, and say: "Paste this into your AI."
-Their AI reads try.agentkepler.tech, helps them pick an item, and hands back a
-checkout link they pay themselves (Apple Pay / Google Pay / card).
+Their AI reads try.agentkepler.tech in the background, helps them pick an item in
+the chat, and replies with a checkout link. Tapping it is the only time they leave
+the chat; they pay themselves (Apple Pay / Google Pay / card).
 Default pick if they have no idea: $1 junior gold miners valuation.
 
 ==================== CLAUDE ====================
-I just met the Qatom team and want to try buying something through my AI. Please fetch https://try.agentkepler.tech, their public storefront and guide for AI assistants, and help me pick something (the $1 one is fine if nothing stands out). Don't connect anything or pay for me; give me the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is before I tap it.
+I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or connect anything, and don't pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
 
 ==================== CHATGPT ====================
-I just met the Qatom team and want to try buying something through my AI. Please browse to https://try.agentkepler.tech (open the page itself; it's their public storefront and guide for AI assistants) and help me pick something (the $1 one is fine if nothing stands out). Don't connect anything or pay for me; give me the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is before I tap it.
+I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech with a quick fetch, not agent mode or a browser (it's plain text written for AI assistants), and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't connect anything or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
 
 ==================== GROK ====================
-I just met the Qatom team and want to try buying something through my AI. Open this exact page and read it, don't just search: https://try.agentkepler.tech (their public storefront and guide for AI assistants). Help me pick something (the $1 one is fine if nothing stands out). Don't connect anything or pay for me; give me the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is before I tap it.
+I just met the Qatom team and want to try buying something through my AI. Read this exact page, don't just search the web: https://try.agentkepler.tech (plain text written for AI assistants). Help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
 
 ==================== META MUSE ====================
-I just met the Qatom team and want to try buying something. Open https://try.agentkepler.tech in your browser (their public storefront and guide for AI assistants) and help me pick something (the $1 one is fine if nothing stands out). Stop at the checkout link and send it to me: I'll tap it and pay myself, so please don't fill in the checkout or pay for me. Tell me what it is before I tap it.
+I just met the Qatom team and want to try buying something. Read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't fill in the checkout or pay for me: just send me the checkout link here and I'll tap it and pay myself. Tell me what it is first.
 
 ==================== IF THEIR AI GETS STUCK ====================
 Text them: https://try.agentkepler.tech  (works in any phone browser, no AI needed)

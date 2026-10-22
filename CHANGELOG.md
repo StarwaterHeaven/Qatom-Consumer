@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2 — 22 October 2026
+
+Headless until checkout: the person stays in their AI chat until they tap the checkout link.
+
+- **AI fetchers get plain text everywhere** (`/`, `/catalog`, `/item/ID`, errors): each item with what to ask the person for and its checkout link, ready to fill in.
+- **AI fetch of a checkout link validates only**: VALID with the exact link, or NOT VALID with reasons. Nothing is created on Qatom.
+- **Link previews never create checkouts**: iMessage, WhatsApp, Slack and similar get a preview card.
+- **Wording**: the guide, the `qatom-consumer` skill (1.1) and the event prompts ask the AI to read, not browse, and to reply with the link in the chat.
+- 49 tests.
+
 ## 1.1 — 22 October 2026
 
 From the first live deploy, which lost its Qatom sign-in within seconds.

@@ -157,7 +157,7 @@ ${opt.length ? `<details${values && opt.some((f) => values.get(f.name)) ? " open
 ${b.ok ? `<p>Single-item checkout link (the person opens it and pays themselves): <code>${esc(cfg.site)}/buy/${item.id}${req.length ? "?" + req.map((f) => `${esc(f.name)}=VALUE`).join("&amp;") : ""}</code>${opt.length ? `. Optional: ${opt.map((f) => `<code>${esc(f.name)}</code>`).join(", ")}` : ""}. Values must be URL-encoded.</p>
 ${ex ? `<p>Ready-made example: <a href="${esc(ex)}">${esc(ex)}</a></p>` : ""}` : `<p>Too small to check out on its own (minimum ${price(cfg.minPrice)} per checkout); combine it with other items.</p>`}
 <p>Several items in one checkout: <code>${esc(cfg.site)}/bundle?item=${item.id}${fs.length ? `&amp;${item.id}.${esc((req[0] || fs[0]).name)}=VALUE` : ""}&amp;item=OTHER_ID…</code> — repeat <code>item=ID</code> per item, prefix each input with its item ID, add <code>qty.ID=N</code> for quantities. The combined total must reach ${price(cfg.minPrice)}.</p>
-${req.some(sensitive) ? `<p>This item needs personal details (${req.filter(sensitive).map((f) => esc(f.name)).join(", ")}). Prefer sending the person to this page to enter them in the form rather than putting them in a link.</p>` : ""}
+${req.some(sensitive) ? `<p>This item needs personal details (${req.filter(sensitive).map((f) => esc(f.name)).join(", ")}). Ask the person in the chat and put them in the link; the link is meant only for that person.</p>` : ""}
 </div>`;
 
   const body = `${status ? `<div class="err" role="alert">${esc(status)}</div>` : ""}
@@ -263,36 +263,96 @@ export function search(items, q) {
     .map((x) => x.i);
 }
 
-// ---------- plain text for AI readers ----------
+// ---------- plain text for AI readers (headless: nothing here needs a browser) ----------
 
-export function catalogText({ catalog, cfg, all = true }) {
-  const items = visible(catalog.items, cfg).filter((i) => all || buyability(i, cfg).ok);
-  const lines = items.map((i) => {
-    const b = buyability(i, cfg);
-    return `- [${i.id}] ${i.name} — ${price(i.price)}${i.seller ? ` — ${i.seller}` : ""}${b.ok ? "" : " — cart only (combine to reach " + price(cfg.minPrice) + ")"}\n  ${summary(i.description, 220)}\n  ${cfg.site}/item/${i.id}`;
-  });
-  return `# Qatom catalog (${items.length} items, refreshed ${catalog.fetched_at || "recently"})
-# Items marked "cart only" are free or below the ${price(cfg.minPrice)} card minimum on their own: combine
-# them with other items in one checkout link (${cfg.site}/bundle?item=ID&ID.input=VALUE&item=ID2…).
-# Every other item also has its own checkout link; see its item page for inputs.
+// Fields to ask for: the required ones; if the seller marked none, all of them (as the form does),
+// except optional search filters on free items, which are fine to leave out.
+function reqFields(item) {
+  const fs = fields(item.input_schema);
+  if (fs.some((f) => f.required)) return fs.filter((f) => f.required);
+  return Number(item.price) ? fs : [];
+}
 
-${lines.join("\n\n")}
+function fieldLine(f) {
+  return `${f.name}${f.required ? "" : " (optional)"}: ${f.description || f.type || ""}${f.enum ? ` [${f.enum.join(" | ")}]` : ""}`;
+}
+
+// How to buy this item, as one or two lines an assistant can act on without fetching anything else.
+function buyLines(item, cfg) {
+  const b = buyability(item, cfg);
+  const req = reqFields(item);
+  const ask = req.length ? `Ask the person for: ${req.map((f) => f.name + (f.enum ? ` (${f.enum.join(" | ")})` : "")).join(", ")}.` : "No inputs needed.";
+  if (!b.ok) {
+    const tpl = `${cfg.site}/bundle?item=${item.id}${req.map((f) => `&${item.id}.${f.name}=VALUE`).join("")}&item=OTHER_ID…`;
+    return `${ask} Cart only (under ${price(cfg.minPrice)} alone): combine with other items so the total reaches ${price(cfg.minPrice)}: ${tpl}`;
+  }
+  const ex = exampleLink(item, cfg);
+  const tpl = `${cfg.site}/buy/${item.id}${req.length ? "?" + req.map((f) => `${f.name}=VALUE`).join("&") : ""}`;
+  return `${ask} Checkout link: ${req.length ? tpl : `${cfg.site}/buy/${item.id}`}${ex && req.length ? ` (example: ${ex})` : ""}`;
+}
+
+export function catalogText({ catalog, cfg, all = true, q = "" }) {
+  let items = visible(catalog.items, cfg).filter((i) => all || buyability(i, cfg).ok);
+  if (q) items = search(items, q);
+  const lines = items.map((i) =>
+    `- [${i.id}] ${i.name} — ${price(i.price)}${i.seller ? ` — ${i.seller}` : ""}\n  ${summary(i.description, 220)}\n  ${buyLines(i, cfg)}\n  Details: ${cfg.site}/item/${i.id}`);
+  return `# Qatom catalog${q ? ` matching "${q}"` : ""} (${items.length} items, refreshed ${catalog.fetched_at || "recently"})
+# Each entry says what to ask the person for and the checkout link to give them.
+# Replace VALUE with the person's answers, URL-encoded. Card payments start at ${price(cfg.minPrice)} per checkout;
+# "cart only" items are combined into one checkout with ${cfg.site}/bundle?item=ID&ID.input=VALUE&item=ID2&qty.ID2=N
+
+${lines.join("\n\n") || "No items match."}
 `;
 }
 
 export function itemText({ item, cfg }) {
-  const b = buyability(item, cfg);
   const fs = fields(item.input_schema);
-  const ex = exampleLink(item, cfg);
   return `# ${item.name}
 Item ${item.id} · ${price(item.price)}${item.seller ? ` · seller: ${item.seller}` : ""}
-${b.ok ? `Checkout link format: ${cfg.site}/buy/${item.id}${fs.filter((f) => f.required).length ? "?" + fs.filter((f) => f.required).map((f) => `${f.name}=VALUE`).join("&") : ""}  (URL-encode values; the person opens it and pays)` : `Cart only: below the ${price(cfg.minPrice)} card minimum on its own.`}
-In a multi-item checkout: ${cfg.site}/bundle?item=${item.id}${fs.length ? `&${item.id}.INPUT=VALUE` : ""}&item=OTHER_ID…  (combined total must reach ${price(cfg.minPrice)})
-${ex ? `Ready-made example: ${ex}\n` : ""}${fs.some((f) => f.required && sensitive(f)) ? `Needs personal details; prefer sending the person to ${cfg.site}/item/${item.id} to enter them in the form.\n` : ""}
+
+## How to buy (in the chat)
+${buyLines(item, cfg)}
+Give the person the finished link. It opens Qatom's checkout; nothing is charged unless they complete it.
+To check a link first without creating anything, fetch it: an AI fetch of a /buy or /bundle link returns a validation result, not a checkout.
+
 ## Description
 ${item.description}
 
 ## Inputs
-${fs.map((f) => `- ${f.name}${f.required ? " (required)" : ""}: ${f.description || f.type || ""}${f.enum ? ` [${f.enum.join(" | ")}]` : ""}`).join("\n") || "- none"}
+${fs.map((f) => `- ${fieldLine(f)}`).join("\n") || "- none"}
 `;
+}
+
+// What an AI fetcher gets from /buy or /bundle: a validation result, never a checkout.
+export function checkText({ ok, link, title, total, problems = [], cfg }) {
+  if (ok) {
+    return `VALID — nothing was created or charged.
+${title} · ${price(total)}
+
+Give the person this exact link to pay (it opens Qatom's checkout, where they pay with Apple Pay, Google Pay or card):
+${link}
+
+After they pay, the result is shown on the checkout page and emailed with the receipt; ask them to paste or screenshot it here.
+`;
+  }
+  return `NOT VALID — nothing was created or charged. Fix these and build the link again:
+${problems.map((p) => `- ${p.id ? `item ${p.id}: ` : ""}${p.message}`).join("\n")}
+
+Item details and inputs: ${cfg.site}/item/ID (plain text)
+`;
+}
+
+// What link-preview fetchers (iMessage, WhatsApp, Slack, ChatGPT's link cards…) get from a buy link.
+export function previewHtml({ title, description, cfg }) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>${esc(title)}</title>
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(description)}">
+<meta property="og:site_name" content="Qatom">
+<meta name="description" content="${esc(description)}">
+</head><body><h1>${esc(title)}</h1><p>${esc(description)}</p><p>Tap the link to pay on Qatom's checkout.</p></body></html>`;
+}
+
+export function errorText({ heading, message }) {
+  return `# ${heading}\n\n${message}\n`;
 }

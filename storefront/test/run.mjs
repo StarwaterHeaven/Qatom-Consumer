@@ -116,14 +116,14 @@ const form = (p, data) => get(p, { method: "POST", headers: { "content-type": "a
 let passed = 0;
 async function t(name, fn) {
   try { await fn(); passed++; console.log("  ✓", name); }
-  catch (e) { console.log("  ✗", name, "\n   ", e.message); process.exitCode = 1; }
+  catch (e) { console.log("  ✗", name, "\n   ", e.message, process.env.STACK ? e.stack : ""); process.exitCode = 1; }
 }
 
 console.log("storefront tests");
 
 await t("simultaneous first requests share ONE refresh (no reuse, sign-in survives)", async () => {
-  const rs = await Promise.all(Array.from({ length: 6 }, () => get("/health?fresh")));
-  const js = await Promise.all(rs.map((r) => r.json()));
+  const rs = await Promise.all(Array.from({ length: 6 }, (_, i) => get(`/health?fresh&n=${i}`)));
+  const js = await Promise.all(rs.map((r) => r.text().then((t) => { try { return JSON.parse(t); } catch { return { ok: false, raw: t.slice(0, 300) }; } })));
   assert.ok(js.every((j) => j.ok), JSON.stringify(js.find((j) => !j.ok)));
   assert.equal(state.refreshCalls, 1);
   assert.equal(state.revoked, false);
@@ -296,7 +296,7 @@ await t("llms.txt: site filled in, buyable list appended", async () => {
 
 await t("item .txt view", async () => {
   const h = await (await get("/item/24.txt")).text();
-  assert.match(h, /Checkout link format: https:\/\/try\.agentkepler\.tech\/buy\/24\?ticker=VALUE/);
+  assert.match(h, /Checkout link: https:\/\/try\.agentkepler\.tech\/buy\/24\?ticker=VALUE/);
 });
 
 // ---- cart ----
@@ -422,6 +422,96 @@ await t("bundle reports per-item problems", async () => {
   assert.match(h, /Item 24<\/a>: ticker is required \(as 24\.ticker=…\)/);
   assert.match(h, /Item 999999<\/a>: not in the catalog/);
   assert.match(h, /email must be an email address/);
+});
+
+// ---- headless: AI fetchers stay in the chat until checkout ----
+const AI = { "user-agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot" };
+const CLAUDE = { "user-agent": "Claude-User (claude-code/1.0; +https://support.anthropic.com/)" };
+const IMESSAGE = { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0" };
+const mints = () => state.calls.filter((c) => c.name === "guest_checkout" || c.name.startsWith("cart_")).length;
+
+await t("AI fetch of / returns the plain-text guide with every item and its link", async () => {
+  const r = await get("/", { headers: AI });
+  const h = await r.text();
+  assert.match(r.headers.get("content-type"), /text\/plain/);
+  assert.match(r.headers.get("vary"), /User-Agent/);
+  assert.match(h, /Designed to stay in the chat until checkout/);
+  assert.match(h, /\[24\] Harcourt Mining NAV Query — \$1\.00/);
+  assert.match(h, /No inputs needed\.|Ask the person for: ticker/);
+  assert.match(h, /Checkout link: https:\/\/try\.agentkepler\.tech\/buy\/24\?ticker=VALUE \(example: https:\/\/try\.agentkepler\.tech\/buy\/24\?ticker=gdxj\)/);
+  assert.match(h, /\[43\] Dog age in human years.*\n.*\n  Ask the person for: dog_age_years\. Cart only/);
+  assert.match(h, /\[34\] Centaur League: search challenges.*\n.*\n  (No inputs needed|Ask the person for)/);
+  assert.doesNotMatch(h, /<html/i);
+});
+
+await t("AI fetch of an item page and a search are plain text", async () => {
+  const h = await (await get("/item/32", { headers: CLAUDE })).text();
+  assert.match(h, /Ask the person for: email, pace \(1_day \| 3_days\), team_name|Ask the person for: .*team_name/);
+  assert.match(h, /pace \(1_day \| 3_days\)/);
+  const q = await (await get("/catalog?q=harcourt", { headers: AI })).text();
+  assert.match(q, /matching "harcourt" \(3 items/);
+});
+
+await t("AI fetch of a buy link validates only: VALID, the exact link, nothing created", async () => {
+  const n = mints();
+  const r = await get("/buy/24?ticker=gdxj&gold=3200&format=text", { headers: AI });
+  const h = await r.text();
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("location"), null);
+  assert.match(h, /^VALID — nothing was created or charged/);
+  assert.match(h, /https:\/\/try\.agentkepler\.tech\/buy\/24\?(gold=3200&ticker=gdxj|ticker=gdxj&gold=3200)\n/);
+  assert.equal(mints(), n);
+});
+
+await t("AI fetch of a bad buy link: NOT VALID with reasons, nothing created", async () => {
+  const n = mints();
+  const r = await get("/buy/24?gold=-5", { headers: AI });
+  const h = await r.text();
+  assert.equal(r.status, 422);
+  assert.match(h, /^NOT VALID/);
+  assert.match(h, /ticker is required/);
+  assert.match(h, /gold must be more than 0/);
+  const r2 = await get("/buy/43?dog_age_years=5", { headers: AI });
+  assert.match(await r2.text(), /under the \$0\.50 card minimum on its own; combine it/);
+  assert.equal(mints(), n);
+});
+
+await t("AI fetch of a bundle link validates only (and refuses under $0.50)", async () => {
+  const n = mints();
+  const ok = await get("/bundle?item=43&43.dog_age_years=5&item=24&24.ticker=gdxj&format=text", { headers: AI });
+  const h = await ok.text();
+  assert.match(h, /^VALID/);
+  assert.match(h, /2 items in one checkout · \$1\.001/);
+  assert.match(h, /bundle\?item=43&43\.dog_age_years=5&item=24&24\.ticker=gdxj\n/); // format=text stripped
+  const low = await get("/bundle?item=43&43.dog_age_years=5", { headers: AI });
+  assert.match(await low.text(), /^NOT VALID[\s\S]*card payments start at \$0\.50/);
+  assert.equal(mints(), n);
+});
+
+await t("link-preview fetchers get a preview card, not a checkout", async () => {
+  const n = mints();
+  const r = await get("/buy/24?ticker=gdxj", { headers: IMESSAGE });
+  const h = await r.text();
+  assert.equal(r.status, 200);
+  assert.match(h, /<meta property="og:title" content="Harcourt Mining NAV Query · \$1\.00">/);
+  const b = await get("/bundle?item=43&43.dog_age_years=5&item=24&24.ticker=gdxj", { headers: IMESSAGE });
+  assert.match(await b.text(), /og:title" content="2 items · \$1\.001"/);
+  assert.equal(mints(), n);
+});
+
+await t("Accept: text/plain also gets text; ?format=html forces the page", async () => {
+  const r = await get("/", { headers: { accept: "text/plain" } });
+  assert.match(r.headers.get("content-type"), /text\/plain/);
+  const r2 = await get("/?format=html", { headers: AI });
+  assert.match(r2.headers.get("content-type"), /text\/html/);
+});
+
+await t("people in a browser still get pages and real checkouts", async () => {
+  const n = mints();
+  const r = await get("/buy/24?ticker=gdxj", { headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" } });
+  assert.equal(r.status, 303);
+  assert.match(r.headers.get("location"), /^https:\/\/checkout\.m\.todaq\.net\/checkout\//);
+  assert.equal(mints(), n + 1);
 });
 
 await t("rate limit: 21st checkout in a minute from one IP gets 429", async () => {
