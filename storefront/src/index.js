@@ -54,10 +54,27 @@ const SECURITY = {
   "x-content-type-options": "nosniff",
 };
 
+const VARY = { vary: "User-Agent, Accept" };
 const html = (body, status = 200, cache = "public, max-age=60") =>
-  new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, ...SECURITY } });
+  new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, ...VARY, ...SECURITY } });
 const text = (body, status = 200, cache = "public, max-age=60") =>
-  new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": cache, "x-content-type-options": "nosniff" } });
+  new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": cache, ...VARY, "x-content-type-options": "nosniff" } });
+
+// Who is asking? AI assistants' fetchers get plain text everywhere and never create a checkout;
+// link-preview fetchers (chat apps drawing a link card) get a small preview page, also without one.
+const AI_UA = /ChatGPT-User|OAI-SearchBot|GPTBot|Claude-User|Claude-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|Perplexity|xAI|Grok|meta-externalagent|meta-externalfetcher|MistralAI-User|DuckAssistBot|cohere-ai|YouBot|Google-Extended/i;
+const PREVIEW_UA = /facebookexternalhit|Facebot|Twitterbot|Slackbot|WhatsApp|TelegramBot|Discordbot|LinkedInBot|SkypeUriPreview|Iframely|Embedly|redditbot|Pinterestbot|vkShare|W3C_Validator|Google-PageRenderer/i;
+export function classify(request, url) {
+  const f = url.searchParams.get("format");
+  if (f === "text" || f === "txt") return "ai";
+  if (f === "html") return "human";
+  const ua = request.headers.get("user-agent") || "";
+  if (AI_UA.test(ua)) return "ai";
+  if (PREVIEW_UA.test(ua)) return "preview";
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  if (/text\/(markdown|plain)/.test(accept) && !accept.includes("text/html")) return "ai";
+  return "human";
+}
 
 function log(event, data = {}) {
   console.log(JSON.stringify({ event, ...data, t: new Date().toISOString() }));
@@ -88,6 +105,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const method = request.method === "HEAD" ? "GET" : request.method;
+    const mode = classify(request, url);
+    const guide = (c) => GUIDE.replaceAll("{{SITE}}", cfg.site) + (c ? "\n" + R.catalogText({ catalog: c, cfg, all: true }) : "");
 
     try {
       if (path === "/robots.txt") return text("User-agent: *\nAllow: /\n", 200, "public, max-age=3600");
@@ -107,23 +126,23 @@ export default {
         }
       }
 
-      if (path === "/llms.txt") {
-        const c = await getCatalog(env, ctx).catch(() => null);
-        return text(GUIDE.replaceAll("{{SITE}}", cfg.site) + (c ? "\n" + R.catalogText({ catalog: c, cfg, all: true }) : ""));
-      }
+      if (path === "/llms.txt") return text(guide(await getCatalog(env, ctx).catch(() => null)));
 
       if (method !== "GET" && !(method === "POST" && (path.startsWith("/buy/") || path.startsWith("/cart/")))) {
         return text("Method not allowed", 405);
       }
 
-      if (path === "/") return html(R.home({ catalog: await getCatalog(env, ctx), cfg }));
+      if (path === "/") {
+        if (mode === "ai") return text(guide(await getCatalog(env, ctx).catch(() => null)));
+        return html(R.home({ catalog: await getCatalog(env, ctx), cfg }));
+      }
 
-      if (path === "/catalog") {
+      if (path === "/catalog" || path === "/catalog.txt") {
         const q = (url.searchParams.get("q") || "").slice(0, 100);
+        if (mode === "ai" || path === "/catalog.txt") return text(R.catalogText({ catalog: await getCatalog(env, ctx), cfg, q }));
         const all = url.searchParams.get("only") === "now" ? "now" : "";
         return html(R.catalogPage({ catalog: await getCatalog(env, ctx), cfg, q, all }));
       }
-      if (path === "/catalog.txt") return text(R.catalogText({ catalog: await getCatalog(env, ctx), cfg }));
 
       if (path === "/nav") {
         const t = url.searchParams.get("ticker") || "gdxj";
@@ -133,35 +152,41 @@ export default {
       let m = path.match(/^\/item\/(\d{1,9})(\.txt)?$/);
       if (m) {
         const item = await findItem(env, ctx, Number(m[1]), cfg);
-        if (!item) return notFound(cfg);
-        return m[2] ? text(R.itemText({ item, cfg })) : html(R.itemPage({ item, cfg }));
+        if (!item) return notFound(cfg, mode);
+        return m[2] || mode === "ai" ? text(R.itemText({ item, cfg })) : html(R.itemPage({ item, cfg }));
       }
 
       m = path.match(/^\/buy\/(\d{1,9})$/);
-      if (m) return buy(request, env, ctx, cfg, Number(m[1]), url);
+      if (m) return buy(request, env, ctx, cfg, Number(m[1]), url, mode);
 
-      if (path === "/cart" && method === "GET") return showCart(request, env, cfg);
+      if (path === "/cart" && method === "GET") {
+        if (mode === "ai") return text(R.errorText({ heading: "The cart is for people in a browser", message: `From a chat, build one checkout link for several items instead: ${cfg.site}/bundle?item=ID&ID.input=VALUE&item=ID2&qty.ID2=N` }));
+        return showCart(request, env, cfg);
+      }
       m = path.match(/^\/cart\/add\/(\d{1,9})$/);
       if (m && method === "POST") return addToCart(request, env, ctx, cfg, Number(m[1]));
       m = path.match(/^\/cart\/remove\/(\d{1,9})$/);
       if (m && method === "POST") return removeLine(request, env, cfg, Number(m[1]));
       if (path === "/cart/checkout" && method === "POST") return checkoutCart(request, env, cfg);
       if (path === "/cart/clear" && method === "POST") return clearCart(request, env, cfg);
-      if (path === "/bundle" && method === "GET") return bundle(request, env, ctx, cfg, url);
+      if (path === "/bundle" && method === "GET") return bundle(request, env, ctx, cfg, url, mode);
 
-      return notFound(cfg);
+      return notFound(cfg, mode);
     } catch (e) {
       log("error", { path, message: String(e.message || e), code: e.code });
       const msg = e instanceof QatomError && e.code === "not_configured"
         ? "The storefront isn't connected to Qatom yet."
         : "The Qatom catalog is briefly unavailable. Please try again in a moment.";
+      if (mode === "ai") return text(R.errorText({ heading: "Something went wrong", message: msg }), 503, "no-store");
       return html(R.errorPage({ heading: "Something went wrong", message: msg, retry: url.pathname + url.search, cfg }), 503, "no-store");
     }
   },
 };
 
-function notFound(cfg) {
-  return html(R.errorPage({ heading: "Not found", message: "That page or item isn't in the Qatom catalog. It may have been removed or made private by its seller.", cfg }), 404);
+function notFound(cfg, mode) {
+  const message = "That page or item isn't in the Qatom catalog. It may have been removed or made private by its seller.";
+  if (mode === "ai") return text(R.errorText({ heading: "Not found", message: `${message} Current catalog: ${cfg.site}/catalog.txt` }), 404);
+  return html(R.errorPage({ heading: "Not found", message, cfg }), 404);
 }
 
 async function findItem(env, ctx, id, cfg) {
@@ -176,11 +201,16 @@ async function findItem(env, ctx, id, cfg) {
   return item || null;
 }
 
-async function buy(request, env, ctx, cfg, id, url) {
+async function buy(request, env, ctx, cfg, id, url, mode = "human") {
   const item = await findItem(env, ctx, id, cfg);
-  if (!item) return notFound(cfg);
+  if (!item) return notFound(cfg, mode);
+
+  if (mode === "preview") {
+    return html(R.previewHtml({ title: `${item.name} · ${R.price(item.price)}`, description: `Pay on Qatom's checkout${item.seller ? ` · sold by ${item.seller}` : ""}. ${R.summary(item.description, 160)}`, cfg }), 200, "no-store");
+  }
 
   if (!R.buyability(item, cfg).ok) {
+    if (mode === "ai") return text(R.checkText({ ok: false, problems: [{ id, message: `costs ${R.price(item.price)}, under the ${R.price(cfg.minPrice)} card minimum on its own; combine it with other items: ${cfg.site}/bundle?item=${id}&ID.input=VALUE&item=OTHER_ID` }], cfg }), 409, "no-store");
     return html(R.itemPage({ item, cfg, status: `This item is below the ${R.price(cfg.minPrice)} card minimum on its own. Add it to your cart with other items instead.` }), 409, "no-store");
   }
 
@@ -189,8 +219,16 @@ async function buy(request, env, ctx, cfg, id, url) {
   const { args, errors, missing } = buildArgs(item.input_schema, params);
   if (missing.length || errors.length) {
     const all = [...missing.map((n) => `${n} is required`), ...errors];
-    log("buy_invalid", { id, missing, n_errors: errors.length });
+    log("buy_invalid", { id, missing, n_errors: errors.length, mode });
+    if (mode === "ai") return text(R.checkText({ ok: false, problems: all.map((message) => ({ id, message })), cfg }), 422, "no-store");
     return html(R.itemPage({ item, cfg, values: params, errors: all }), 422, "no-store");
+  }
+
+  if (mode === "ai") {
+    // An assistant checking the link: validate only. The checkout is created when the person taps it.
+    const link = `${cfg.site}/buy/${id}${Object.keys(args).length ? "?" + new URLSearchParams(Object.entries(args).map(([k, v]) => [k, String(v)])).toString() : ""}`;
+    log("buy_checked", { id });
+    return text(R.checkText({ ok: true, link, title: item.name, total: Number(item.price), cfg }), 200, "no-store");
   }
 
   if (!(await allowed(env, request))) {
@@ -342,9 +380,13 @@ async function checkoutCart(request, env, cfg) {
 
 // /bundle?item=43&43.dog_age_years=5&item=69&69.temperature=30&qty.69=2
 // Builds a fresh cart each time (independent of the visitor's cookie cart) and 303s to its checkout.
-async function bundle(request, env, ctx, cfg, url) {
+async function bundle(request, env, ctx, cfg, url, mode = "human") {
   const ids = [...new Set(url.searchParams.getAll("item").map((x) => parseInt(x, 10)).filter((n) => n > 0))].slice(0, 20);
-  if (!ids.length) return html(R.bundleErrorPage({ problems: [{ message: "No items given. Use ?item=ID&item=ID2…" }], cfg }), 400, "no-store");
+  if (!ids.length) {
+    const problems = [{ message: "No items given. Use ?item=ID&item=ID2…" }];
+    if (mode === "ai") return text(R.checkText({ ok: false, problems, cfg }), 400, "no-store");
+    return html(R.bundleErrorPage({ problems, cfg }), 400, "no-store");
+  }
 
   const lines = [];
   const problems = [];
@@ -364,8 +406,17 @@ async function bundle(request, env, ctx, cfg, url) {
     problems.push({ message: `The total is ${R.price(total)}; card payments start at ${R.price(cfg.minPrice)}. Add more items or a higher quantity.` });
   }
   if (problems.length) {
-    log("bundle_invalid", { n: problems.length });
+    log("bundle_invalid", { n: problems.length, mode });
+    if (mode === "ai") return text(R.checkText({ ok: false, problems, cfg }), 422, "no-store");
     return html(R.bundleErrorPage({ problems, cfg }), 422, "no-store");
+  }
+  if (mode === "ai") {
+    log("bundle_checked", { lines: lines.length });
+    const clean = new URL(url.href); clean.searchParams.delete("format");
+    return text(R.checkText({ ok: true, link: clean.href, title: `${lines.reduce((n, l) => n + l.qty, 0)} items in one checkout`, total, cfg }), 200, "no-store");
+  }
+  if (mode === "preview") {
+    return html(R.previewHtml({ title: `${lines.length} items · ${R.price(total)}`, description: "One checkout for several items from the Qatom catalog. Pay on Qatom's checkout.", cfg }), 200, "no-store");
   }
   if (!(await allowed(env, request))) return tooMany(cfg, "/catalog");
 

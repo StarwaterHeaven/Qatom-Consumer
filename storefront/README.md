@@ -21,6 +21,14 @@ page; this Worker never spends money and never sees card details.
   pays for everything once the total reaches the minimum. The cart lives in Qatom
   (`cart_*` tools); the storefront keeps only its id, in an HttpOnly cookie.
 - `/bundle` lets an AI build a multi-item checkout as a single link.
+- **Headless for AI.** The Worker tells three kinds of visitor apart by user agent
+  (and `Accept`, or `?format=text|html`):
+  - AI fetchers (ChatGPT-User, Claude-User, Grok/xAI, Perplexity, Meta…) get plain
+    text on every route. On `/buy` and `/bundle` they get a validation result
+    (VALID with the exact link, or NOT VALID with reasons) and nothing is created.
+  - Link-preview fetchers (iMessage, WhatsApp, Slack, Discord…) get a small preview
+    card on `/buy` and `/bundle`, so drawing a link card never creates a checkout.
+  - Everyone else (a person tapping the link) gets the normal pages and checkout.
 
 | Route | What |
 |---|---|
@@ -70,7 +78,7 @@ OAuth + MCP loaded with the live 84-item catalog snapshot: routing, schema
 validation, escaping of hostile listings, token refresh/rotation, 401 retry,
 seller-side rejections, redirect-host guard, rate limit, and the cart and bundle
 flows against a cart mock shaped like live Qatom responses, the $0.50 checkout
-guard, and catalog paging past 500 items. 41 checks.
+guard, and catalog paging past 500 items. 49 checks.
 
 ## Proving it live (do in this order)
 

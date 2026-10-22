@@ -8,7 +8,9 @@ Most people use an AI app but will never add an MCP connector to it, whether for
 
 Tell any AI app (Claude, ChatGPT, Grok, Meta Muse):
 
-> *Please read https://try.agentkepler.tech and help me buy something from the Qatom catalog. Don't pay for me; give me the checkout link and I'll pay myself.*
+> *Please read https://try.agentkepler.tech and help me buy something from the Qatom catalog, here in the chat. Don't open a browser or pay for me; reply with the checkout link and I'll pay myself.*
+
+Everything stays in the chat until the person taps that link: the AI reads the storefront as plain text in the background, asks for any inputs, and replies with the link.
 
 Or open https://try.agentkepler.tech in a phone browser. No AI needed.
 
@@ -33,9 +35,10 @@ Then ask your agent: *"Find me something on Qatom for…"* or *"Help me try a $1
 - It reads the live public catalog from the Qatom master MCP (every merchant, refreshed every 5 minutes), so new items appear with no change here.
 - It only ever lists the catalog and creates guest checkouts. The buyer pays on Qatom's own checkout page (checkout.m.todaq.net); the storefront never spends money and never sees card details.
 - Card payments start at $0.50. Items that cost less, including the many priced at a fraction of a cent per call, go into a Qatom cart and are paid together once the total reaches $0.50. No checkout link is issued below that.
-- Inputs are checked against each item's own schema before a checkout is created. Personal details go through a form, not a link.
+- **Headless until checkout.** AI fetchers (ChatGPT, Claude, Grok, Perplexity, Meta) get plain text on every page: each item, what to ask for, and its checkout link. An AI fetch of a checkout link only validates it (VALID or NOT VALID, nothing created). Chat apps drawing a link preview get a preview card, not a checkout. People in a browser get the normal pages.
+- Inputs are checked against each item's own schema before a checkout is created.
 
-Deploy with `bash storefront/scripts/deploy.sh` (steps in the [storefront README](storefront/README.md)). `cd storefront && npm install && npm test` runs 41 checks against a mocked Qatom loaded with a snapshot of the live catalog.
+Deploy with `bash storefront/scripts/deploy.sh` (steps in the [storefront README](storefront/README.md)). `cd storefront && npm install && npm test` runs 49 checks against a mocked Qatom loaded with a snapshot of the live catalog.
 
 ## Money safety
 

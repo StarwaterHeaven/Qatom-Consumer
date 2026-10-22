@@ -1,12 +1,29 @@
-# Qatom storefront: buy from the Qatom catalog with any AI, no setup
-# {{SITE}}  ·  v2.0, Oct 2026  ·  Qatom team
+# Qatom storefront: buy from the Qatom catalog from inside any AI chat
+# {{SITE}}  ·  v3.0, Oct 2026  ·  Qatom team  ·  source: https://github.com/StarwaterHeaven/Qatom-Consumer
 
 ## What this site is
 
-A public, read-only window onto the Qatom catalog with one-time guest checkout
-links. People who don't (or can't) connect an AI app to Qatom use it to find and
-buy items from their phone. Nothing here requires a connector, an account, or an
-AI that spends money: the person completes and pays for each purchase themselves.
+A public, read-only window onto the Qatom catalog, written for AI assistants.
+It lets a person buy from Qatom without connecting their AI app to anything:
+the assistant finds the item and builds a checkout link in the chat, and the
+person pays for it themselves. Nothing here needs a connector, an account, or
+an AI that spends money.
+
+## Designed to stay in the chat until checkout
+
+Everything an assistant needs is plain text on this site, so the person does
+not need to see any page until they pay:
+
+1. Read: this file lists every item, what to ask for, and its checkout link.
+   There is no need to open a browser or show pages to the person.
+2. Ask: collect any inputs from the person in the chat.
+3. Check (optional): an AI fetch of a {{SITE}}/buy/... or {{SITE}}/bundle?...
+   link returns a validation result, not a checkout. It creates and charges
+   nothing, says whether the inputs are valid, and gives the exact link.
+4. Reply: give the person the link in the chat. Tapping it is the first time
+   they leave the chat: Qatom's checkout opens and they pay.
+5. After: the result is shown on the checkout page and emailed with the
+   receipt; the person can paste or screenshot it back for you to explain.
 
 ## What Qatom is
 
@@ -16,57 +33,42 @@ prices; buyers get an emailed receipt for each purchase.
 
 - Operator: TODAQ Micro, doing business as Qatom (Delaware corporation; team in
   Toronto, Canada). Product site: https://qatom.ai · company: https://todaq.net
-- This site is run by the Qatom team on agentkepler.tech, its resource site for
-  AI agents. Domains involved: try.agentkepler.tech (this storefront),
-  checkout.m.todaq.net (Qatom's hosted checkout, where /buy links redirect),
+- Domains involved: try.agentkepler.tech (this storefront, run by the Qatom
+  team), checkout.m.todaq.net (Qatom's hosted checkout, where links lead),
   qatom.ai and todaq.net (product and company sites).
 - Source code for this site: https://github.com/StarwaterHeaven/Qatom-Consumer
 - Support, questions and refunds: support@todaq.net
 
-## How a purchase works
+## At checkout
 
-1. Each item page ({{SITE}}/item/ID) shows the price, the seller, what the item
-   returns and the inputs it needs, plus a form.
-2. The checkout link {{SITE}}/buy/ID?input=value opens a fresh checkout page on
-   checkout.m.todaq.net (Qatom's hosted checkout) for that item and those inputs.
-   Payment is by Apple Pay, Google Pay or card, processed by Stripe. Card details
-   go only to that page, never into a chat.
-3. The buyer enters and verifies an email address to receive a secure receipt
-   with proof of purchase. It is not an account to manage.
-4. The result is shown after payment and included with the emailed receipt.
-   Nothing is charged unless the checkout is completed.
+- The checkout page shows the item, the seller and the price. Payment is by
+  Apple Pay, Google Pay or card, processed by Stripe. Card details go only to
+  that page, never into a chat.
+- The buyer enters and verifies an email address to receive a secure receipt
+  with proof of purchase. It is not an account to manage.
+- Nothing is charged unless the checkout is completed.
 
-Card payments start at $0.50 per checkout. Items that cost less (many are
-priced per call at a fraction of a cent, some are free) are combined in a cart
-and paid together: one checkout page, one payment, and each item is delivered to
-its seller with its inputs.
+## Links
 
-## Several items in one checkout
+- One item: {{SITE}}/buy/ID?input=value   (URL-encode values)
+- Several items in one checkout:
+  {{SITE}}/bundle?item=ID&ID.input=value&item=ID2&ID2.input=value&qty.ID2=3
+  Repeat item=ID per item (up to 20); prefix each input with its item ID;
+  qty.ID sets a quantity (1-20).
+- Card payments start at $0.50 per checkout. Items priced below that on their
+  own (many cost a fraction of a cent per call; some are free) are marked
+  "cart only" and are combined with others in one bundle link. No checkout link
+  is issued for a total under $0.50.
+- A link carries the person's inputs; it is meant only for that person.
 
-{{SITE}}/bundle?item=ID&ID.input=value&item=ID2&ID2.input=value&qty.ID2=3
+## More detail
 
-- Repeat item=ID for each item (up to 20). Prefix each input with its item ID.
-- qty.ID sets a quantity (1-20; each is a separate purchase).
-- The combined total must reach $0.50; below that no checkout link is issued.
-  The link builds a fresh cart and opens its checkout; if an input is missing or invalid, it shows which, and nothing
-  is created.
-- People can also build a cart themselves: "Add to cart" on any item page,
-  then {{SITE}}/cart.
-
-## Finding items
-
-- Browse: {{SITE}}/catalog (HTML) or {{SITE}}/catalog.txt (plain text)
-- Search: {{SITE}}/catalog?q=WORDS
-- Item detail: {{SITE}}/item/ID or {{SITE}}/item/ID.txt
-- Every item is listed at the end of this file. "cart only" items are under
-  the card minimum on their own.
-
-When an item needs personal details (an email, a phone number), the item page
-form is the better route than a link, so those details stay out of URLs.
+- Catalog only: {{SITE}}/catalog.txt (search: {{SITE}}/catalog.txt?q=WORDS)
+- One item: {{SITE}}/item/ID.txt
 
 ## Example item
 
-{{SITE}}/buy/24?ticker=gdxj  ($1)
+{{SITE}}/buy/24?ticker=gdxj  ($1, no other inputs needed)
 A live valuation of GDXJ, the VanEck Junior Gold Miners ETF, from Harcourt
 Valuations (Harcourt Capital Services Ltd, https://harcourtvaluations.ai): whether
 junior gold mining shares trade above or below what their mines are worth, from
@@ -77,7 +79,7 @@ rate. Informational only, not investment advice.
 
 ## Only if the person asks about connecting their AI to Qatom
 
-Nothing on this site needs a connection. For items marked as needing one, Qatom
-can be added as a custom connector (URL https://mcp.m.todaq.net/mcp) in the AI
-app's own connector settings, where the app handles sign-in. Purchases made that
-way still require the person's approval.
+Nothing on this site needs a connection. To buy from inside the chat without a
+checkout page, Qatom can be added as a custom connector (URL
+https://mcp.m.todaq.net/mcp) in the AI app's own connector settings, where the
+app handles sign-in. Purchases made that way still require the person's approval.

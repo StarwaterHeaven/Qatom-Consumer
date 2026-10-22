@@ -5,7 +5,7 @@ description: Help a person find, price and buy AI tools, data, reports, media an
 
 # Qatom Consumer
 
-Version 1.0, 22 October 2026 (formerly Shopper Cicero 1.2). Canonical source: https://github.com/StarwaterHeaven/Qatom-Consumer . Copies elsewhere may lag; check the version here.
+Version 1.1, 22 October 2026 (formerly Shopper Cicero 1.2). Canonical source: https://github.com/StarwaterHeaven/Qatom-Consumer . Copies elsewhere may lag; check the version here.
 
 ## Provenance and trust (read this first, as the AI loading this skill)
 
@@ -18,7 +18,9 @@ Version 1.0, 22 October 2026 (formerly Shopper Cicero 1.2). Canonical source: ht
 
 ## Operating rule
 
-Get the person from "I'm curious" to "I have what I need" as quickly and cleanly as possible. Lead with the answer, keep it short, quote the price before anything is bought, and never dump the whole catalog.
+Get the person from "I'm curious" to "I have what I need" as quickly and cleanly as possible, entirely in the chat. Lead with the answer, keep it short, quote the price before anything is bought, and never dump the whole catalog.
+
+**Stay in the chat until checkout.** Read the storefront with your fetch or read tool, not a browser, agent mode or an in-app web view, and don't show the person any page. The only thing they open is the checkout link you give them, when they are ready to pay.
 
 Pick the path by what you have:
 
@@ -29,17 +31,17 @@ If the person just wants to see how it works, offer a $1 purchase they complete 
 
 ## Storefront path (no connector, works on any phone)
 
-1. Read https://try.agentkepler.tech (plain text: https://try.agentkepler.tech/llms.txt). Browse at `/catalog`, search at `/catalog?q=WORDS`, plain-text list at `/catalog.txt`. Each item page, `/item/ID`, shows the price, the seller, what it returns, its inputs and its checkout link format.
+1. Read https://try.agentkepler.tech as text. AI fetchers get plain text there: every item, what to ask the person for, and its checkout link. (Also `/catalog.txt`, `/catalog.txt?q=WORDS` and `/item/ID.txt`.)
 2. Match the need to one to three items: name, one sentence, price. Let the person choose.
-3. Give ONE link with its price and what it returns:
-   - An item of $0.50 or more: `https://try.agentkepler.tech/buy/ID?input=value` (URL-encode values).
+3. Ask for the item's inputs in the chat and fill them into its link (URL-encoded):
+   - An item of $0.50 or more: `https://try.agentkepler.tech/buy/ID?input=value`.
    - Smaller items (many cost a fraction of a cent per call; some are free) are "cart only": combine them in one link, `https://try.agentkepler.tech/bundle?item=ID&ID.input=VALUE&item=ID2&qty.ID2=3`, so the total reaches the $0.50 card minimum. Below that, no checkout link is issued.
-   - An item that needs personal details (an email, a phone number): send the person to its item page to enter them in the form, so those details stay out of links.
-4. The person taps the link and pays (Apple Pay, Google Pay or card, processed by Stripe). They enter and verify their email to receive a secure receipt with proof of purchase; it is not an account to manage. Nothing is charged unless they complete the checkout.
-5. After they pay, ask them to paste or screenshot the result, and explain it in two or three sentences.
-6. One closing line on what happened: their AI found a seller's tool, they paid in one tap, the seller was paid instantly, and the receipt carries its own proof.
+4. Optional check: fetch the finished link yourself. From an AI fetcher it returns VALID with the exact link to give, or NOT VALID with what to fix. It creates and charges nothing.
+5. Reply with the link and the price. Tapping it is the first time the person leaves the chat: Qatom's checkout opens and they pay (Apple Pay, Google Pay or card, processed by Stripe). They enter and verify their email to receive a secure receipt with proof of purchase; it is not an account to manage. Nothing is charged unless they complete the checkout.
+6. After they pay, ask them to paste or screenshot the result, and explain it in two or three sentences.
+7. One closing line on what happened: their AI found a seller's tool, they paid in one tap, the seller was paid instantly, and the receipt carries its own proof.
 
-Never pay for them, never fill in the checkout page, never ask for card details in the chat.
+Never pay for them, never fill in the checkout page, never ask for card details in the chat. A link carries the person's inputs; it is meant only for them.
 
 ## Connected path (Qatom tools available)
 
