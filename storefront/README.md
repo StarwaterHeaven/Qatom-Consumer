@@ -8,7 +8,9 @@ page; this Worker never spends money and never sees card details.
 ## How it works
 
 - The Worker signs in to the main Qatom MCP (`https://mcp.m.todaq.net/mcp`) as a
-  service account and calls only `catalog_search` and `guest_checkout`.
+  service account and calls only `catalog_search`, `guest_checkout` and the cart tools.
+  Its sign-in lives in one Durable Object that refreshes it one request at a time,
+  because Qatom revokes a sign-in whose old refresh token is reused.
 - `/catalog` and `/item/:id` render the public catalog (cached 5 minutes) as mobile
   pages and plain text for AI readers.
 - `/buy/:id` validates inputs against the item's `input_schema`, mints a fresh guest
@@ -43,11 +45,14 @@ git clone https://github.com/StarwaterHeaven/Qatom-Consumer
 bash Qatom-Consumer/storefront/scripts/deploy.sh
 ```
 
-It installs the tools, signs in to Cloudflare if needed, creates the token store,
+It installs the tools, signs in to Cloudflare if needed,
 deploys the Worker to try.agentkepler.tech, then opens your browser once so the
 storefront can sign in to Qatom. Sign in as a dedicated account whose agent wallet
 is empty (e.g. kepleragentteam@todaq.net): guest checkout never touches it, so even a
 leaked token can't spend. It finishes by checking `/health`. Safe to re-run.
+
+`/health` reports what's wrong in plain text if the storefront can't reach Qatom. If it
+says `signin_required`, run `node scripts/get-token.mjs --apply` in this folder.
 
 If the deploy says try.agentkepler.tech already has a DNS record, delete that record
 in Cloudflare (DNS for agentkepler.tech) and run the script again; the Worker creates
@@ -65,7 +70,7 @@ OAuth + MCP loaded with the live 84-item catalog snapshot: routing, schema
 validation, escaping of hostile listings, token refresh/rotation, 401 retry,
 seller-side rejections, redirect-host guard, rate limit, and the cart and bundle
 flows against a cart mock shaped like live Qatom responses, the $0.50 checkout
-guard, and catalog paging past 500 items. 39 checks.
+guard, and catalog paging past 500 items. 41 checks.
 
 ## Proving it live (do in this order)
 
@@ -105,5 +110,7 @@ What a first-party version would remove or improve:
    schema (`unit: "bad-unit"`); validating at add time would protect sellers.
 5. **Merchant opt-out** of the public storefront per item (today it shows whatever
    `catalog_search` returns publicly).
-6. Token rotation here is KV-based, which is fine for event traffic; a native
-   version wouldn't need it.
+6. Qatom rotates refresh tokens and revokes the whole sign-in if an old one is reused.
+   Here one Durable Object refreshes strictly one request at a time; the first live
+   deploy, with tokens in KV, lost its sign-in to that race within seconds. A native
+   version wouldn't need a service sign-in at all.

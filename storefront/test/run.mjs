@@ -16,16 +16,19 @@ const catalog = JSON.parse(readFileSync("test/catalog-fixture.json", "utf8"));
 catalog.items.push({ id: 9001, name: `<script>alert(1)</script>Evil "item"`, description: `x<img src=x onerror=alert(1)> https://ok.example/a"b`, price: 2, seller: `<b>bad</b>`, input_schema: { type: "object", properties: {} } });
 
 // ---- mock Qatom ----
-const state = { refreshCalls: 0, sessions: 0, calls: [], rt: "RT0", at: "AT1", fail401Once: false, evilUrl: false };
+const state = { refreshCalls: 0, sessions: 0, calls: [], rt: "RT0", at: "AT1", fail401Once: false, evilUrl: false, used: new Set(), revoked: false, denyRefresh: false };
 async function outbound(req) {
   const url = new URL(req.url);
   if (url.host === "pay.m.todaq.net" && url.pathname === "/v4/oidc/token") {
     const body = new URLSearchParams(await req.text());
     state.refreshCalls++;
-    if (body.get("grant_type") !== "refresh_token" || body.get("refresh_token") !== state.rt) {
+    // Like Qatom's OIDC server: reusing a rotated refresh token revokes the whole sign-in.
+    if (state.used.has(body.get("refresh_token"))) { state.revoked = true; state.at = "REVOKED"; }
+    if (state.revoked || state.denyRefresh || body.get("grant_type") !== "refresh_token" || body.get("refresh_token") !== state.rt) {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     }
     assert.equal(body.get("resource"), "https://mcp.m.todaq.net");
+    state.used.add(state.rt);
     state.rt = "RT" + state.refreshCalls; // rotate
     state.at = "AT" + (state.refreshCalls + 1);
     return Response.json({ access_token: state.at, refresh_token: state.rt, expires_in: 3600, token_type: "Bearer" });
@@ -101,7 +104,7 @@ function mockCart(name, a) {
 
 const mf = new Miniflare({
   modules: true, script, compatibilityDate: "2026-08-01",
-  kvNamespaces: ["TOKENS"],
+  durableObjects: { TOKEN_MANAGER: "TokenManager" },
   bindings: { SITE_URL: "https://try.agentkepler.tech", MIN_GUEST_PRICE: "0.5", HIDDEN_IDS: "20,180,215", FEATURED_ID: "24", QATOM_CLIENT_ID: "client-1", QATOM_REFRESH_TOKEN: "RT0" },
   outboundService: outbound,
 });
@@ -118,6 +121,14 @@ async function t(name, fn) {
 
 console.log("storefront tests");
 
+await t("simultaneous first requests share ONE refresh (no reuse, sign-in survives)", async () => {
+  const rs = await Promise.all(Array.from({ length: 6 }, () => get("/health?fresh")));
+  const js = await Promise.all(rs.map((r) => r.json()));
+  assert.ok(js.every((j) => j.ok), JSON.stringify(js.find((j) => !j.ok)));
+  assert.equal(state.refreshCalls, 1);
+  assert.equal(state.revoked, false);
+});
+
 await t("home renders featured $1 item and counts", async () => {
   const r = await get("/"); const h = await r.text();
   assert.equal(r.status, 200);
@@ -126,12 +137,11 @@ await t("home renders featured $1 item and counts", async () => {
   assert.match(r.headers.get("content-security-policy"), /default-src 'none'/);
 });
 
-await t("token refreshed once, rotated token saved to KV", async () => {
-  assert.equal(state.refreshCalls, 1);
-  const kv = await mf.getKVNamespace("TOKENS");
-  const rec = JSON.parse(await kv.get("qatom-oauth"));
-  assert.equal(rec.refresh_token, "RT1");
-  assert.equal(rec.access_token, "AT2");
+await t("token refreshed once and reused, not refreshed per request", async () => {
+  const before = state.refreshCalls;
+  await get("/catalog"); await get("/item/24"); await get("/health?fresh");
+  assert.equal(state.refreshCalls, before);
+  assert.equal(state.revoked, false);
 });
 
 await t("catalog lists everything (minus hidden), labelled Buy now / Add to cart", async () => {
@@ -433,17 +443,20 @@ await t("catalog pages past 500 items", async () => {
   assert.equal(state.catalogCalls - before, 3);
 });
 
-await t("health reports the cause as JSON when Qatom refuses", async () => {
-  const saved = state.rt; state.rt = "SOMETHING-ELSE"; state.at = "EXPIRED";
-  const kv = await mf.getKVNamespace("TOKENS"); await kv.delete("qatom-oauth");
+await t("health reports the cause as JSON when Qatom refuses, then recovers", async () => {
+  state.denyRefresh = true; state.at = "EXPIRED"; // current access token rejected, refresh refused
   const r = await get("/health?fresh");
   const j = await r.json();
   assert.equal(r.status, 503);
   assert.equal(j.ok, false);
-  assert.match(j.error, /token refresh failed: HTTP 400 invalid_grant/);
+  assert.equal(j.code, "signin_required");
+  assert.match(j.error, /HTTP 400 invalid_grant.*get-token\.mjs --apply/);
   assert.equal(j.configured.refresh_token, true);
-  assert.doesNotMatch(JSON.stringify(j), /RT\d|AT\d/); // no token values leak
-  state.rt = saved;
+  assert.doesNotMatch(JSON.stringify(j), /\b(RT|AT)\d/); // no token values leak
+  state.denyRefresh = false;
+  const ok = await (await get("/health?fresh")).json();
+  assert.equal(ok.ok, true);
+  assert.equal(state.revoked, false);
 });
 
 await t("health", async () => {

@@ -1,12 +1,15 @@
 // Qatom master-MCP client for the storefront Worker.
-// Auth: OAuth refresh-token flow against pay.m.todaq.net (offline_access), rotating
-// tokens kept in KV. Falls back to a static QATOM_MCP_TOKEN if no refresh token is set.
+// Auth: OAuth refresh tokens from pay.m.todaq.net (offline_access). Qatom rotates the
+// refresh token on every use and treats reuse of an old one as theft (it revokes the
+// whole sign-in), so every refresh goes through ONE Durable Object (TokenManager), which
+// runs them strictly one at a time and keeps the current token in its own storage.
+// A static QATOM_MCP_TOKEN is used only if no refresh token is configured.
 
 const MCP_URL = "https://mcp.m.todaq.net/mcp";
 const TOKEN_URL = "https://pay.m.todaq.net/v4/oidc/token";
 const RESOURCE = "https://mcp.m.todaq.net";
-const KV_KEY = "qatom-oauth";
 const PROTOCOL = "2025-06-18";
+const SIGN_IN_AGAIN = "Run `node scripts/get-token.mjs --apply` in the storefront folder to sign the storefront in to Qatom again.";
 
 export class QatomError extends Error {
   constructor(message, { status = 502, code = "upstream" } = {}) {
@@ -16,21 +19,14 @@ export class QatomError extends Error {
   }
 }
 
-// ---------- tokens ----------
+// ---------- tokens: Durable Object ----------
 
-let memToken = null; // { access_token, expires_at } per isolate
-
-async function loadStored(env) {
-  if (!env.TOKENS) return null;
-  try { return await env.TOKENS.get(KV_KEY, "json"); } catch { return null; }
+async function sha256(text) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function saveStored(env, rec) {
-  if (!env.TOKENS) return;
-  await env.TOKENS.put(KV_KEY, JSON.stringify(rec));
-}
-
-async function refresh(env, refreshToken) {
+async function refreshWith(env, refreshToken) {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
@@ -44,53 +40,69 @@ async function refresh(env, refreshToken) {
   const res = await fetch(TOKEN_URL, { method: "POST", headers, body });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.access_token) {
-    const err = new QatomError(`token refresh failed: HTTP ${res.status} ${data.error || ""} ${String(data.error_description || "").slice(0, 200)}`.trim(), { status: 503, code: data.error || "refresh_failed" });
-    throw err;
+    const detail = `${data.error || ""} ${String(data.error_description || "").slice(0, 200)}`.trim();
+    if (data.error === "invalid_grant") {
+      throw new QatomError(`Qatom sign-in expired or was revoked (HTTP ${res.status} ${detail}). ${SIGN_IN_AGAIN}`, { status: 503, code: "signin_required" });
+    }
+    throw new QatomError(`token refresh failed: HTTP ${res.status} ${detail}`.trim(), { status: 503, code: data.error || "refresh_failed" });
   }
   return {
     access_token: data.access_token,
-    // rotate if the server issued a new refresh token; otherwise keep the old one
-    refresh_token: data.refresh_token || refreshToken,
+    refresh_token: data.refresh_token || refreshToken, // rotated if the server issued a new one
     expires_at: Date.now() + Math.max(60, (data.expires_in || 3600) - 60) * 1000,
   };
 }
 
-async function getAccessToken(env, { force = false } = {}) {
-  const now = Date.now();
-  if (!force && memToken && memToken.expires_at > now) return memToken.access_token;
-
-  const canRefresh = env.QATOM_CLIENT_ID && (env.QATOM_REFRESH_TOKEN || env.TOKENS);
-  if (!canRefresh) {
-    if (env.QATOM_MCP_TOKEN) return env.QATOM_MCP_TOKEN;
-    throw new QatomError("storefront is not signed in to Qatom (no token configured)", { status: 503, code: "not_configured" });
+export class TokenManager {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.queue = Promise.resolve(); // one refresh at a time, even across awaits
   }
 
-  let stored = await loadStored(env);
-  if (!force && stored?.access_token && stored.expires_at > now) {
-    memToken = stored;
-    return stored.access_token;
-  }
-
-  const candidates = [stored?.refresh_token, env.QATOM_REFRESH_TOKEN].filter(Boolean);
-  let lastErr;
-  for (const rt of [...new Set(candidates)]) {
+  async fetch(request) {
+    const { bad = null } = await request.json().catch(() => ({}));
+    const run = this.queue.then(() => this.current(bad));
+    this.queue = run.catch(() => {});
     try {
-      const rec = await refresh(env, rt);
-      await saveStored(env, rec);
-      memToken = rec;
-      return rec.access_token;
+      const { access_token, expires_at } = await run;
+      return Response.json({ access_token, expires_at });
     } catch (e) {
-      lastErr = e;
-      // Another isolate may have rotated the token a moment ago: re-read once.
-      const again = await loadStored(env);
-      if (again?.access_token && again.expires_at > Date.now() && again.access_token !== stored?.access_token) {
-        memToken = again;
-        return again.access_token;
-      }
+      return Response.json({ error: String(e.message || e), code: e.code || "refresh_failed" }, { status: 503 });
     }
   }
-  if (env.QATOM_MCP_TOKEN) return env.QATOM_MCP_TOKEN;
-  throw lastErr || new QatomError("no refresh token stored on the Worker yet (QATOM_REFRESH_TOKEN)", { status: 503, code: "not_configured" });
+
+  async current(bad) {
+    const env = this.env;
+    let rec = await this.state.storage.get("rec"); // { access_token, refresh_token, expires_at, boot }
+    // A new sign-in (a different QATOM_REFRESH_TOKEN secret) replaces whatever is stored.
+    const boot = env.QATOM_REFRESH_TOKEN ? await sha256(env.QATOM_REFRESH_TOKEN) : null;
+    if (boot && (!rec || rec.boot !== boot)) rec = { refresh_token: env.QATOM_REFRESH_TOKEN, boot };
+    if (!rec?.refresh_token) throw new QatomError(`The storefront is not signed in to Qatom. ${SIGN_IN_AGAIN}`, { status: 503, code: "not_configured" });
+
+    // Reuse the current access token unless it expired or the caller just saw it rejected.
+    if (rec.access_token && rec.expires_at > Date.now() && rec.access_token !== bad) return rec;
+
+    const next = { ...(await refreshWith(env, rec.refresh_token)), boot: rec.boot };
+    await this.state.storage.put("rec", next);
+    return next;
+  }
+}
+
+let memToken = null; // per-isolate cache: { access_token, expires_at }
+
+async function getAccessToken(env, { bad = null } = {}) {
+  if (!bad && memToken && memToken.expires_at > Date.now()) return memToken.access_token;
+  if (!env.QATOM_REFRESH_TOKEN || !env.TOKEN_MANAGER) {
+    if (env.QATOM_MCP_TOKEN) return env.QATOM_MCP_TOKEN;
+    throw new QatomError(`The storefront is not signed in to Qatom. ${SIGN_IN_AGAIN}`, { status: 503, code: "not_configured" });
+  }
+  const stub = env.TOKEN_MANAGER.get(env.TOKEN_MANAGER.idFromName("qatom"));
+  const res = await stub.fetch("https://token-manager/token", { method: "POST", body: JSON.stringify({ bad }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) throw new QatomError(data.error || "token manager failed", { status: 503, code: data.code || "refresh_failed" });
+  memToken = { access_token: data.access_token, expires_at: data.expires_at };
+  return data.access_token;
 }
 
 // ---------- MCP transport ----------
@@ -163,8 +175,9 @@ async function rawCall(token, sid, name, args) {
 // Call a tool with up to one token refresh and one session reopen.
 export async function callTool(env, name, args) {
   let forced = false;
+  let bad = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const token = await getAccessToken(env, { force: forced });
+    const token = await getAccessToken(env, { bad });
     try {
       if (!session || session.token !== token) session = await openSession(token);
       const msg = await rawCall(token, session.id, name, args);
@@ -172,7 +185,7 @@ export async function callTool(env, name, args) {
       return parseToolResult(msg.result);
     } catch (e) {
       session = null;
-      if (e.code === "unauthorized" && !forced) { forced = true; memToken = null; continue; }
+      if (e.code === "unauthorized" && !forced) { forced = true; bad = token; memToken = null; continue; }
       if (e.code === "session" && attempt === 0) continue;
       throw e;
     }
