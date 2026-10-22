@@ -3,22 +3,29 @@ Copy the block for their AI, text or message it, and say: "Paste this into your 
 Their AI reads try.agentkepler.tech in the background, helps them pick an item in
 the chat, and replies with a checkout link. Tapping it is the only time they leave
 the chat; they pay themselves (Apple Pay / Google Pay / card).
+Tell them: the answer appears on the checkout page after paying, and only there.
+They should copy it or screenshot it before closing that page.
 Default pick if they have no idea: $1 junior gold miners valuation.
 
 ==================== CLAUDE ====================
-I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or connect anything, and don't pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
+I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or connect anything, and don't pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first, and remind me to save the answer after I pay.
 
 ==================== CHATGPT ====================
-I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech with a quick fetch, not agent mode or a browser (it's plain text written for AI assistants), and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't connect anything or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
+I just met the Qatom team and want to try buying something through my AI. Please read https://try.agentkepler.tech with a quick fetch, not agent mode or a browser (it's plain text written for AI assistants), and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't connect anything or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first, and remind me to save the answer after I pay.
 
 ==================== GROK ====================
-I just met the Qatom team and want to try buying something through my AI. Read this exact page, don't just search the web: https://try.agentkepler.tech (plain text written for AI assistants). Help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first.
+I just met the Qatom team and want to try buying something through my AI. Read this exact page, don't just search the web: https://try.agentkepler.tech (plain text written for AI assistants). Help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't open a browser or pay for me: just reply with the checkout link and I'll pay myself with Apple Pay or Google Pay. Tell me what it is first, and remind me to save the answer after I pay.
 
 ==================== META MUSE ====================
-I just met the Qatom team and want to try buying something. Read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't fill in the checkout or pay for me: just send me the checkout link here and I'll tap it and pay myself. Tell me what it is first.
+I just met the Qatom team and want to try buying something. Read https://try.agentkepler.tech (plain text written for AI assistants) and help me pick something here in the chat; the $1 one is fine if nothing stands out. Don't fill in the checkout or pay for me: just send me the checkout link here and I'll tap it and pay myself. Tell me what it is first, and remind me to save the answer after I pay.
 
 ==================== IF THEIR AI GETS STUCK ====================
 Text them: https://try.agentkepler.tech  (works in any phone browser, no AI needed)
 
 ==================== AFTER THEY PAY ====================
-"Paste or screenshot the result back to your AI and ask what it means."
+"Copy the answer from that page (or screenshot it) before you close it. Paste it back
+to your AI and ask what it means. To keep it as a file: https://try.agentkepler.tech/result"
+
+==================== IF THEY LIKED IT ====================
+"Next time, connect your AI to Qatom and the answer comes straight back into the chat:
+https://try.agentkepler.tech/connect"

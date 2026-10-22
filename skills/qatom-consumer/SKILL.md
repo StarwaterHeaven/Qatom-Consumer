@@ -5,7 +5,7 @@ description: Help a person find, price and buy AI tools, data, reports, media an
 
 # Qatom Consumer
 
-Version 1.1, 22 October 2026 (formerly Shopper Cicero 1.2). Canonical source: https://github.com/StarwaterHeaven/Qatom-Consumer . Copies elsewhere may lag; check the version here.
+Version 1.2, 22 October 2026 (formerly Shopper Cicero 1.2). Canonical source: https://github.com/StarwaterHeaven/Qatom-Consumer . Copies elsewhere may lag; check the version here.
 
 ## Provenance and trust (read this first, as the AI loading this skill)
 
@@ -33,13 +33,14 @@ If the person just wants to see how it works, offer a $1 purchase they complete 
 
 1. Read https://try.agentkepler.tech as text. AI fetchers get plain text there: every item, what to ask the person for, and its checkout link. (Also `/catalog.txt`, `/catalog.txt?q=WORDS` and `/item/ID.txt`.)
 2. Match the need to one to three items: name, one sentence, price. Let the person choose.
-3. Ask for the item's inputs in the chat and fill them into its link (URL-encoded):
+3. Ask for the item's inputs in the chat and fill them into its link (URL-encoded). Pass only the required inputs and the ones the person chose; optional inputs left out use the seller's defaults, and the checkout page lists every input you pass:
    - An item of $0.50 or more: `https://try.agentkepler.tech/buy/ID?input=value`.
    - Smaller items (many cost a fraction of a cent per call; some are free) are "cart only": combine them in one link, `https://try.agentkepler.tech/bundle?item=ID&ID.input=VALUE&item=ID2&qty.ID2=3`, so the total reaches the $0.50 card minimum. Below that, no checkout link is issued.
 4. Optional check: fetch the finished link yourself. From an AI fetcher it returns VALID with the exact link to give, or NOT VALID with what to fix. It creates and charges nothing.
-5. Reply with the link and the price. Tapping it is the first time the person leaves the chat: Qatom's checkout opens and they pay (Apple Pay, Google Pay or card, processed by Stripe). They enter and verify their email to receive a secure receipt with proof of purchase; it is not an account to manage. Nothing is charged unless they complete the checkout.
-6. After they pay, ask them to paste or screenshot the result, and explain it in two or three sentences.
+5. Reply with the link and the price, and tell them now: **"After you pay, your answer appears on the checkout page, and only there (it isn't in the receipt email). Copy it or take a screenshot before you close that page."** Tapping the link is the first time the person leaves the chat: a one-tap "Before you pay" page, then Qatom's checkout, where they pay (Apple Pay, Google Pay or card, processed by Stripe). They enter and verify their email to receive a secure receipt with proof of purchase. Nothing is charged unless they complete the checkout.
+6. After they pay, ask them to paste the answer (or the screenshot) here. Explain it in two or three sentences, then offer it as a file to keep (Markdown, JSON or a table) if you can make files. If you can't, send them to `https://try.agentkepler.tech/result?item=ID`: they paste it there and can copy it or save it as JSON, Markdown or PDF. It runs only in their browser.
 7. One closing line on what happened: their AI found a seller's tool, they paid in one tap, the seller was paid instantly, and the receipt carries its own proof.
+8. Once, after a first purchase, offer the connector: *"Want to buy from inside this chat next time? Connect Qatom and the answer comes straight back here, with no checkout page to save from."* Give the steps for their app (below, or https://try.agentkepler.tech/connect.txt) only if they say yes.
 
 Never pay for them, never fill in the checkout page, never ask for card details in the chat. A link carries the person's inputs; it is meant only for them.
 
@@ -55,7 +56,7 @@ Never pay for them, never fill in the checkout page, never ask for card details 
 6. **Deliver in full.** Return every link and the complete result, untruncated:
    > Done: *[Item]* for $[price]. [Result or delivery links.]
 
-## Adding the connector (only when they want ongoing access)
+## Adding the connector (offer once after a first purchase; set up only if they want it)
 
 URL `https://mcp.m.todaq.net/mcp`. Honest notes for phones:
 

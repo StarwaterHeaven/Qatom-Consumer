@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3 — 22 October 2026
+
+From the first live purchases: the answer appears only on Qatom's checkout page after payment, so a buyer who closes that page loses it.
+
+- **"Before you pay" page.** A person tapping a `/buy` or `/bundle` link sees the item, seller, price and their inputs (folded away when there are more than three), with a reminder to save the answer, then one tap to Qatom's checkout. Nothing is created until they continue (`&go=1`). `CONFIRM_BEFORE_CHECKOUT = "off"` skips it.
+- **Keep your result** (`/result`, `/result?item=ID`): paste the answer from the checkout page; it is shown formatted (lists, tables, links) and can be copied, or downloaded as JSON or Markdown, or saved as PDF. Runs only in the browser: script under a per-request nonce, `connect-src 'none'`, `form-action 'none'`, nothing sent or stored. Unwraps MCP-style results (`content[].text`) and JSON inside strings.
+- **Connector page** (`/connect`, `/connect.txt`): why and how to connect Claude, ChatGPT or Grok to Qatom; Meta Muse has no route yet.
+- **AI wording:** the guide (v3.1), VALID responses and item text tell the AI to warn about saving the answer before payment, bring it back into the chat and offer it as a file, and offer the connector once after a first purchase. Pass only required inputs and the ones the person chose, so the checkout page lists fewer. The false "emailed with the receipt" promise is gone everywhere.
+- **Skill** `qatom-consumer` 1.2 and **event prompts** updated to match.
+- 56 tests.
+
 ## 1.2 — 22 October 2026
 
 Headless until checkout: the person stays in their AI chat until they tap the checkout link.

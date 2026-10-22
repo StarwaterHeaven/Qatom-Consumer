@@ -35,12 +35,15 @@ page; this Worker never spends money and never sees card details.
 | `/` | Home: featured $1 item, how it works, AI note |
 | `/catalog?q=&only=now` | Browse/search (default: everything) |
 | `/item/:id` (`.txt`) | Item details, form, AI link format |
-| `/buy/:id?input=…` (GET or POST) | Mint checkout and redirect |
+| `/buy/:id?input=…` (GET) | "Before you pay" page (item, inputs, save-your-answer reminder); `&go=1` mints the checkout and redirects |
+| `POST /buy/:id` | From the item form: mint checkout and redirect |
 | `POST /cart/add/:id` | Add an item with its inputs to the visitor's cart |
 | `/cart` | Lines, total, remove, check out, empty |
-| `/bundle?item=ID&ID.input=v&qty.ID=n…` | AI-buildable multi-item checkout |
+| `/bundle?item=ID&ID.input=v&qty.ID=n…` | AI-buildable multi-item checkout ("Before you pay" page first; `&go=1` to continue) |
+| `/result[?item=ID]` | Keep your result: paste the answer, copy it or save it as JSON, Markdown or PDF (browser only) |
+| `/connect` (`.txt`) | How to connect an AI app to Qatom |
 | `/nav?ticker=` | Shortcut to the Harcourt NAV demo |
-| `/llms.txt`, `/catalog.txt` | Plain text for AI readers |
+| `/llms.txt`, `/catalog.txt`, `/result.txt`, `/connect.txt` | Plain text for AI readers |
 | `/health` | Catalog reachable + item count |
 
 ## Deploy (about 5 minutes)
@@ -78,7 +81,7 @@ OAuth + MCP loaded with the live 84-item catalog snapshot: routing, schema
 validation, escaping of hostile listings, token refresh/rotation, 401 retry,
 seller-side rejections, redirect-host guard, rate limit, and the cart and bundle
 flows against a cart mock shaped like live Qatom responses, the $0.50 checkout
-guard, and catalog paging past 500 items. 49 checks.
+guard, catalog paging past 500 items, the "Before you pay" page, and the result and connector pages. 56 checks.
 
 ## Proving it live (do in this order)
 
@@ -101,6 +104,7 @@ guard, and catalog paging past 500 items. 49 checks.
 - `HIDDEN_IDS` — test items kept off the storefront (now 20, 180, 215). Others that
   may be test listings: 2 Front Tire, 21 Apple Stock, 30 Unobtanium, 29 Digital Anvil.
 - `FEATURED_ID` — item on the home page (24, Harcourt NAV).
+- `CONFIRM_BEFORE_CHECKOUT` — `"off"` sends people straight from a `/buy` or `/bundle` link to Qatom's checkout (default: on).
 
 ## Notes for Matthew (making this a native Qatom feature)
 
@@ -110,8 +114,12 @@ What a first-party version would remove or improve:
    pay link per item). Then no service account or token rotation.
 2. **Hosted item pages on qatom.ai** generated from `input_schema`, like these.
    Trust is the biggest win: AIs check that the domain matches the brand.
-3. **Result delivery to guests**: show the fulfilment on the success page and in
-   the receipt, and give the buyer a link they can paste back to their AI.
+3. **Result delivery to guests**: today the answer appears only on the checkout page
+   after payment, as raw JSON; the receipt email has none of it and its link later says
+   "Already paid". Format it, add Copy and Download (JSON, Markdown, PDF), repeat it in
+   the receipt and on the completed-checkout link, and offer "back to your AI".
+   Also on that page: fold long input lists, show the seller, use the buyer-facing
+   description, and drop "Email saved to your account".
 4. **Cart minimum**: decide what the cart checkout does below $0.50 (a live cart for
    $0.001 got a checkout link on 21 Oct; whether the page can take that payment
    is unconfirmed). Also: `cart_add_item` accepted an argument outside the item's

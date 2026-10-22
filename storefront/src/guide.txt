@@ -1,5 +1,5 @@
 # Qatom storefront: buy from the Qatom catalog from inside any AI chat
-# {{SITE}}  ·  v3.0, Oct 2026  ·  Qatom team  ·  source: https://github.com/StarwaterHeaven/Qatom-Consumer
+# {{SITE}}  ·  v3.1, Oct 2026  ·  Qatom team  ·  source: https://github.com/StarwaterHeaven/Qatom-Consumer
 
 ## What this site is
 
@@ -16,14 +16,35 @@ not need to see any page until they pay:
 
 1. Read: this file lists every item, what to ask for, and its checkout link.
    There is no need to open a browser or show pages to the person.
-2. Ask: collect any inputs from the person in the chat.
+2. Ask: collect any inputs from the person in the chat. Pass only the required
+   inputs and the ones the person chose: optional inputs you leave out use the
+   seller's defaults, and the checkout page lists every input you pass.
 3. Check (optional): an AI fetch of a {{SITE}}/buy/... or {{SITE}}/bundle?...
    link returns a validation result, not a checkout. It creates and charges
    nothing, says whether the inputs are valid, and gives the exact link.
-4. Reply: give the person the link in the chat. Tapping it is the first time
-   they leave the chat: Qatom's checkout opens and they pay.
-5. After: the result is shown on the checkout page and emailed with the
-   receipt; the person can paste or screenshot it back for you to explain.
+4. Reply: give the person the link in the chat, and tell them to save the
+   answer (see "After the purchase"). Tapping it is the first time they leave
+   the chat: a one-tap "Before you pay" page, then Qatom's checkout.
+5. After: see "After the purchase" below.
+
+## After the purchase (important)
+
+The answer appears on Qatom's checkout page once the person has paid, and
+only there. It is NOT in the receipt email, and the receipt link later shows
+only "Already paid". If they close that page without saving it, the answer
+is lost.
+
+- Before they pay, tell them: "After you pay, your answer appears on the
+  checkout page. Copy it or take a screenshot before you close it."
+- After they pay, ask them to paste it (or the screenshot) back into the chat.
+  Explain it in two or three sentences, then offer it as a file to keep
+  (Markdown, JSON or a table) if you can make files.
+- If you can't make files, send them to {{SITE}}/result?item=ID : they paste
+  the answer and can copy it or save it as JSON, Markdown or PDF. It runs only
+  in their browser; nothing is sent or stored.
+- Once, after a first purchase, offer to connect their AI to Qatom so next
+  time the answer comes straight back into the chat, with no checkout page:
+  steps for each app at {{SITE}}/connect.txt . Only if they want it.
 
 ## What Qatom is
 
@@ -65,6 +86,7 @@ prices; buyers get an emailed receipt for each purchase.
 
 - Catalog only: {{SITE}}/catalog.txt (search: {{SITE}}/catalog.txt?q=WORDS)
 - One item: {{SITE}}/item/ID.txt
+- Saving a result: {{SITE}}/result.txt · connecting an AI app: {{SITE}}/connect.txt
 
 ## Example item
 
@@ -77,9 +99,11 @@ reference figure at https://reports.harcourtvaluations.ai/nav-query/gdxj ; the
 paid call recalculates it live and accepts your own metal prices or discount
 rate. Informational only, not investment advice.
 
-## Only if the person asks about connecting their AI to Qatom
+## Connecting their AI to Qatom (offer once, after a first purchase)
 
-Nothing on this site needs a connection. To buy from inside the chat without a
-checkout page, Qatom can be added as a custom connector (URL
-https://mcp.m.todaq.net/mcp) in the AI app's own connector settings, where the
-app handles sign-in. Purchases made that way still require the person's approval.
+Nothing on this site needs a connection. For repeat buyers, Qatom can be added
+as a custom connector (URL https://mcp.m.todaq.net/mcp) in the AI app's own
+connector settings, where the app handles sign-in. Then the AI buys inside the
+chat and the answer comes straight back, with no checkout page to save from.
+Purchases made that way still need the person's approval, and the AI can only
+spend what is in its own agent wallet. Per-app steps: {{SITE}}/connect.txt

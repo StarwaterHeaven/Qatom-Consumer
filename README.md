@@ -37,8 +37,9 @@ Then ask your agent: *"Find me something on Qatom for…"* or *"Help me try a $1
 - Card payments start at $0.50. Items that cost less, including the many priced at a fraction of a cent per call, go into a Qatom cart and are paid together once the total reaches $0.50. No checkout link is issued below that.
 - **Headless until checkout.** AI fetchers (ChatGPT, Claude, Grok, Perplexity, Meta) get plain text on every page: each item, what to ask for, and its checkout link. An AI fetch of a checkout link only validates it (VALID or NOT VALID, nothing created). Chat apps drawing a link preview get a preview card, not a checkout. People in a browser get the normal pages.
 - Inputs are checked against each item's own schema before a checkout is created.
+- **Keeping the answer.** The answer appears on Qatom's checkout page after payment, and only there for now (not in the receipt email). A one-tap "Before you pay" page tells the person to save it; [`/result`](https://try.agentkepler.tech/result) turns a pasted answer into a copyable, downloadable file (JSON, Markdown, PDF) without sending it anywhere; and the AI offers, once, to connect Qatom so next time the answer comes straight back into the chat ([`/connect`](https://try.agentkepler.tech/connect)).
 
-Deploy with `bash storefront/scripts/deploy.sh` (steps in the [storefront README](storefront/README.md)). `cd storefront && npm install && npm test` runs 49 checks against a mocked Qatom loaded with a snapshot of the live catalog.
+Deploy with `bash storefront/scripts/deploy.sh` (steps in the [storefront README](storefront/README.md)). `cd storefront && npm install && npm test` runs 56 checks against a mocked Qatom loaded with a snapshot of the live catalog.
 
 ## Money safety
 

@@ -5,14 +5,16 @@
 //   GET  /                     home (featured $1 demo, how it works)
 //   GET  /catalog[?q=&all=1]   browse/search; default shows items buyable here
 //   GET  /item/:id             details, inputs form, AI-facing link format
-//   GET  /buy/:id?field=…      validate inputs -> mint guest checkout -> 303 to checkout.m.todaq.net
+//   GET  /buy/:id?field=…      validate inputs -> "Before you pay" page -> (&go=1) mint guest checkout -> 303 to checkout.m.todaq.net
 //   POST /buy/:id              same, from the item form (keeps personal details out of URLs)
 //   POST /cart/add/:id         add an item (with inputs) to the visitor's Qatom cart (cart id in a cookie)
 //   GET  /cart                 cart lines, total, remove, checkout (one link pays for everything)
 //   POST /cart/remove/:line, /cart/checkout, /cart/clear
 //   GET  /bundle?item=ID&ID.input=v&item=ID2&qty.ID2=3   AI-buildable multi-item checkout -> 303
 //   GET  /nav[?ticker=]        shortcut for the Harcourt NAV demo
-//   GET  /llms.txt /catalog.txt /item/:id.txt   plain text for AI readers
+//   GET  /result[?item=ID]     keep your result: paste the answer shown after payment; copy / JSON / Markdown / PDF (browser only)
+//   GET  /connect              how to connect an AI app to Qatom (for repeat buyers)
+//   GET  /llms.txt /catalog.txt /item/:id.txt /result.txt /connect.txt   plain text for AI readers
 //   GET  /robots.txt /health
 
 export { TokenManager } from "./qatom.js";
@@ -45,6 +47,9 @@ function config(env) {
     featuredId: Number(env.FEATURED_ID || DEFAULTS.featuredId),
     featuredBlurb: FEATURED_BLURB,
     examples: EXAMPLES,
+    // A one-tap "Before you pay" page between a /buy or /bundle link and Qatom's checkout,
+    // so the person knows to save the answer shown after payment. CONFIRM_BEFORE_CHECKOUT = "off" skips it.
+    confirm: String(env.CONFIRM_BEFORE_CHECKOUT ?? "on").toLowerCase() !== "off",
   };
 }
 
@@ -127,6 +132,21 @@ export default {
       }
 
       if (path === "/llms.txt") return text(guide(await getCatalog(env, ctx).catch(() => null)));
+
+      if (path === "/connect" || path === "/connect.txt") {
+        if (mode === "ai" || path === "/connect.txt") return text(R.connectText({ cfg }), 200, "public, max-age=300");
+        return html(R.connectPage({ cfg }), 200, "public, max-age=300");
+      }
+
+      if (path === "/result" || path === "/result.txt") {
+        const rid = parseInt(url.searchParams.get("item") || "", 10);
+        const item = rid > 0 ? await findItem(env, ctx, rid, cfg).catch(() => null) : null;
+        if (mode === "ai" || path === "/result.txt") return text(R.resultText({ cfg, item }));
+        const nonce = crypto.randomUUID().replace(/-/g, "");
+        const res = html(R.resultPage({ cfg, item, nonce }), 200, "no-store");
+        res.headers.set("content-security-policy", `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'`);
+        return res;
+      }
 
       if (method !== "GET" && !(method === "POST" && (path.startsWith("/buy/") || path.startsWith("/cart/")))) {
         return text("Method not allowed", 405);
@@ -228,7 +248,13 @@ async function buy(request, env, ctx, cfg, id, url, mode = "human") {
     // An assistant checking the link: validate only. The checkout is created when the person taps it.
     const link = `${cfg.site}/buy/${id}${Object.keys(args).length ? "?" + new URLSearchParams(Object.entries(args).map(([k, v]) => [k, String(v)])).toString() : ""}`;
     log("buy_checked", { id });
-    return text(R.checkText({ ok: true, link, title: item.name, total: Number(item.price), cfg }), 200, "no-store");
+    return text(R.checkText({ ok: true, link, title: item.name, total: Number(item.price), cfg, itemId: id }), 200, "no-store");
+  }
+
+  if (cfg.confirm && request.method === "GET" && url.searchParams.get("go") !== "1") {
+    const go = new URL(url.href); go.searchParams.delete("format"); go.searchParams.set("go", "1");
+    log("buy_confirm_shown", { id });
+    return html(R.confirmPage({ lines: [{ name: item.name, seller: item.seller, price: Number(item.price), qty: 1, args }], total: Number(item.price), goHref: go.pathname + go.search, resultHref: `/result?item=${id}`, cfg }), 200, "no-store");
   }
 
   if (!(await allowed(env, request))) {
@@ -399,7 +425,7 @@ async function bundle(request, env, ctx, cfg, url, mode = "human") {
     for (const n of missing) problems.push({ id, message: `${n} is required (as ${id}.${n}=…)` });
     for (const e of errors) problems.push({ id, message: e });
     const qty = Math.min(20, Math.max(1, parseInt(url.searchParams.get(`qty.${id}`) || "1", 10) || 1));
-    lines.push({ id, args, qty, price: Number(item.price) || 0 });
+    lines.push({ id, args, qty, price: Number(item.price) || 0, name: item.name, seller: item.seller });
   }
   const total = lines.reduce((t, l) => t + l.price * l.qty, 0);
   if (!problems.length && total < cfg.minPrice) {
@@ -417,6 +443,11 @@ async function bundle(request, env, ctx, cfg, url, mode = "human") {
   }
   if (mode === "preview") {
     return html(R.previewHtml({ title: `${lines.length} items · ${R.price(total)}`, description: "One checkout for several items from the Qatom catalog. Pay on Qatom's checkout.", cfg }), 200, "no-store");
+  }
+  if (cfg.confirm && url.searchParams.get("go") !== "1") {
+    const go = new URL(url.href); go.searchParams.set("go", "1");
+    log("bundle_confirm_shown", { lines: lines.length });
+    return html(R.confirmPage({ lines, total, goHref: go.pathname + go.search, resultHref: `/result${lines.length === 1 ? `?item=${lines[0].id}` : ""}`, cfg }), 200, "no-store");
   }
   if (!(await allowed(env, request))) return tooMany(cfg, "/catalog");
 

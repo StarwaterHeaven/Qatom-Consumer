@@ -122,8 +122,9 @@ async function t(name, fn) {
 console.log("storefront tests");
 
 await t("simultaneous first requests share ONE refresh (no reuse, sign-in survives)", async () => {
-  const rs = await Promise.all(Array.from({ length: 6 }, (_, i) => get(`/health?fresh&n=${i}`)));
-  const js = await Promise.all(rs.map((r) => r.text().then((t) => { try { return JSON.parse(t); } catch { return { ok: false, raw: t.slice(0, 300) }; } })));
+  // Read each body as soon as its response arrives (Miniflare can otherwise hand back a consumed body under load).
+  const js = await Promise.all(Array.from({ length: 6 }, (_, i) => get(`/health?fresh&n=${i}`).then((r) => r.text())
+    .then((t) => { try { return JSON.parse(t); } catch { return { ok: false, raw: t.slice(0, 300) }; } })));
   assert.ok(js.every((j) => j.ok), JSON.stringify(js.find((j) => !j.ok)));
   assert.equal(state.refreshCalls, 1);
   assert.equal(state.revoked, false);
@@ -219,7 +220,7 @@ await t("hidden and unknown items 404", async () => {
 });
 
 await t("GET /buy mints checkout and 303s to checkout.m.todaq.net with the right args", async () => {
-  const r = await get("/buy/24?ticker=gdxj&gold=3200");
+  const r = await get("/buy/24?ticker=gdxj&gold=3200&go=1");
   assert.equal(r.status, 303);
   assert.match(r.headers.get("location"), /^https:\/\/checkout\.m\.todaq\.net\/checkout\/[0-9a-f-]{36}$/);
   const c = state.calls.at(-1);
@@ -227,8 +228,8 @@ await t("GET /buy mints checkout and 303s to checkout.m.todaq.net with the right
 });
 
 await t("each tap mints a fresh session", async () => {
-  const a = (await get("/buy/24?ticker=gdxj")).headers.get("location");
-  const b = (await get("/buy/24?ticker=gdxj")).headers.get("location");
+  const a = (await get("/buy/24?ticker=gdxj&go=1")).headers.get("location");
+  const b = (await get("/buy/24?ticker=gdxj&go=1")).headers.get("location");
   assert.notEqual(a, b);
 });
 
@@ -259,7 +260,7 @@ await t("sub-minimum item cannot be bought (409)", async () => {
 });
 
 await t("seller-side rejection shows the reason (422)", async () => {
-  const r = await get("/buy/24?ticker=NOPE");
+  const r = await get("/buy/24?ticker=NOPE&go=1");
   assert.equal(r.status, 422);
   assert.match(await r.text(), /Unknown ticker NOPE/);
 });
@@ -267,14 +268,14 @@ await t("seller-side rejection shows the reason (422)", async () => {
 await t("expired access token: one refresh, then success", async () => {
   const before = state.refreshCalls;
   state.fail401Once = true;
-  const r = await get("/buy/24?ticker=gdxj");
+  const r = await get("/buy/24?ticker=gdxj&go=1");
   assert.equal(r.status, 303);
   assert.equal(state.refreshCalls, before + 1);
 });
 
 await t("never redirects off Qatom's checkout host", async () => {
   state.evilUrl = true;
-  const r = await get("/buy/24?ticker=gdxj");
+  const r = await get("/buy/24?ticker=gdxj&go=1");
   state.evilUrl = false;
   assert.equal(r.status, 503);
   assert.equal(r.headers.get("location"), null);
@@ -398,7 +399,7 @@ await t("forged cookie values are ignored", async () => {
 });
 
 await t("bundle: several sub-cent items + quantity in one link -> one cart checkout", async () => {
-  const r = await get("/bundle?item=43&43.dog_age_years=5&item=69&69.temperature=30&qty.69=2&item=24&24.ticker=gdxj");
+  const r = await get("/bundle?item=43&43.dog_age_years=5&item=69&69.temperature=30&qty.69=2&item=24&24.ticker=gdxj&go=1");
   assert.equal(r.status, 303);
   assert.match(r.headers.get("location"), /^https:\/\/checkout\.m\.todaq\.net\/cart\//);
   const adds = state.calls.filter((c) => c.name === "cart_add_item").slice(-3);
@@ -508,15 +509,85 @@ await t("Accept: text/plain also gets text; ?format=html forces the page", async
 
 await t("people in a browser still get pages and real checkouts", async () => {
   const n = mints();
-  const r = await get("/buy/24?ticker=gdxj", { headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" } });
+  const r = await get("/buy/24?ticker=gdxj&go=1", { headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" } });
   assert.equal(r.status, 303);
   assert.match(r.headers.get("location"), /^https:\/\/checkout\.m\.todaq\.net\/checkout\//);
   assert.equal(mints(), n + 1);
 });
 
+
+// ---- 1.3: before-you-pay page, keep-your-result page, connector page ----
+await t("a person tapping a /buy link sees 'Before you pay' first; nothing is created until Continue", async () => {
+  const n = mints();
+  const r = await get("/buy/24?ticker=gdxj&gold=3200");
+  const h = await r.text();
+  assert.equal(r.status, 200);
+  assert.equal(mints(), n);
+  assert.match(h, /Before you pay: save your answer/);
+  assert.match(h, /isn&#39;t in the receipt email/);
+  assert.match(h, /href="\/buy\/24\?ticker=gdxj&amp;gold=3200&amp;go=1"/);
+  assert.match(h, /href="\/result\?item=24"/);
+  assert.match(h, /sold by Harcourt/);
+});
+
+await t("many inputs collapse into a summary on the 'Before you pay' page", async () => {
+  const h = await (await get("/buy/24?ticker=gdxj&gold=3200&silver=60&cu=6&rate=0.08")).text();
+  assert.match(h, /<summary>Your inputs \(5\)<\/summary>/);
+});
+
+await t("a person tapping a /bundle link sees the lines and total first", async () => {
+  const n = carts.size;
+  const r = await get("/bundle?item=43&43.dog_age_years=5&item=24&24.ticker=gdxj");
+  const h = await r.text();
+  assert.equal(r.status, 200);
+  assert.equal(carts.size, n);
+  assert.match(h, /2 items in one checkout/);
+  assert.match(h, /go=1/);
+});
+
+await t("AI validation tells the AI to warn about saving the answer and to offer the connector once", async () => {
+  const h = await (await get("/buy/24?ticker=gdxj", { headers: AI })).text();
+  assert.match(h, /only there \(it is not in the receipt email\)/);
+  assert.match(h, /\/result\?item=24/);
+  assert.match(h, /\/connect\.txt/);
+  assert.doesNotMatch(h, /emailed with the receipt/);
+});
+
+await t("guide no longer promises the answer in the receipt email", async () => {
+  const h = await (await get("/llms.txt")).text();
+  assert.doesNotMatch(h, /emailed with the\s+receipt/);
+  assert.match(h, /## After the purchase/);
+  assert.match(h, /Pass only the required/);
+});
+
+await t("/result page: script runs under a nonce, nothing can be sent anywhere, item name prefilled", async () => {
+  const r = await get("/result?item=24");
+  const h = await r.text();
+  const csp = r.headers.get("content-security-policy");
+  const nonce = (csp.match(/'nonce-([a-f0-9]+)'/) || [])[1];
+  assert.ok(nonce);
+  assert.match(csp, /connect-src 'none'/);
+  assert.match(csp, /form-action 'none'/);
+  assert.match(h, new RegExp(`<script nonce="${nonce}">`));
+  assert.match(h, /value="Harcourt Mining NAV Query"/);
+  assert.match(h, /Download JSON/);
+  assert.match(h, /Save as PDF/);
+  assert.doesNotMatch(h, /innerHTML/);
+});
+
+await t("/result and /connect as text for AIs", async () => {
+  const r = await (await get("/result", { headers: AI })).text();
+  assert.match(r, /not in the receipt email/);
+  const c = await (await get("/connect.txt")).text();
+  assert.match(c, /https:\/\/mcp\.m\.todaq\.net\/mcp/);
+  assert.match(c, /Meta Muse: No custom connectors yet/);
+  const p = await (await get("/connect")).text();
+  assert.match(p, /Buy from inside your AI chat/);
+});
+
 await t("rate limit: 21st checkout in a minute from one IP gets 429", async () => {
   let last;
-  for (let i = 0; i < 25; i++) last = await get("/buy/24?ticker=gdxj", { headers: { "cf-connecting-ip": "203.0.113.9" } });
+  for (let i = 0; i < 25; i++) last = await get("/buy/24?ticker=gdxj&go=1", { headers: { "cf-connecting-ip": "203.0.113.9" } });
   assert.equal(last.status, 429);
 });
 
