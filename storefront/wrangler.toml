@@ -9,15 +9,19 @@ rules = [{ type = "Text", globs = ["**/*.txt"], fallthrough = true }]
 
 [vars]
 SITE_URL = "https://try.agentkepler.tech"
-MIN_GUEST_PRICE = "0.5"      # Stripe card minimum (USD); items below are "connected AI only"
+MIN_GUEST_PRICE = "0.5"      # Stripe card minimum (USD) per checkout; smaller items go through a cart
 HIDDEN_IDS = "20,180,215"    # test items kept out of the storefront
 FEATURED_ID = "24"           # Harcourt NAV, $1
 
-# Rotating OAuth tokens. Create once:  npx wrangler kv namespace create TOKENS
-# then paste the id it prints here.
-[[kv_namespaces]]
-binding = "TOKENS"
-id = "REPLACE_WITH_KV_ID"
+# Qatom sign-in. Qatom rotates refresh tokens and revokes the sign-in if an old one is
+# reused, so one Durable Object holds the token and refreshes it one request at a time.
+[[durable_objects.bindings]]
+name = "TOKEN_MANAGER"
+class_name = "TokenManager"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TokenManager"]
 
 # 20 checkout links per minute per IP
 [[ratelimits]]

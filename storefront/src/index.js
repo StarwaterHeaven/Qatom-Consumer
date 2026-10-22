@@ -15,6 +15,7 @@
 //   GET  /llms.txt /catalog.txt /item/:id.txt   plain text for AI readers
 //   GET  /robots.txt /health
 
+export { TokenManager } from "./qatom.js";
 import { getCatalog, mintCheckout, QatomError, cartAdd, cartView, cartRemove, cartDiscard, cartCheckout, validCartId } from "./qatom.js";
 import { buildArgs } from "./validate.js";
 import * as R from "./render.js";
@@ -101,7 +102,7 @@ export default {
           // Never includes tokens: messages carry status codes and the server's error text only.
           return json({
             ok: false, code: e.code || "error", error: String(e.message || e).slice(0, 400),
-            configured: { client_id: !!env.QATOM_CLIENT_ID, refresh_token: !!env.QATOM_REFRESH_TOKEN, static_token: !!env.QATOM_MCP_TOKEN, kv: !!env.TOKENS },
+            configured: { client_id: !!env.QATOM_CLIENT_ID, refresh_token: !!env.QATOM_REFRESH_TOKEN, static_token: !!env.QATOM_MCP_TOKEN, token_manager: !!env.TOKEN_MANAGER },
           }, 503);
         }
       }
