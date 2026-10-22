@@ -93,10 +93,17 @@ export default {
       if (path === "/favicon.ico") return new Response(null, { status: 204 });
 
       if (path === "/health") {
-        const c = await getCatalog(env, ctx);
-        return new Response(JSON.stringify({ ok: true, items: c.items.length, fetched_at: c.fetched_at }), {
-          headers: { "content-type": "application/json", "cache-control": "no-store" },
-        });
+        const json = (o, st) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+        try {
+          const c = await getCatalog(env, ctx, { fresh: url.searchParams.has("fresh") });
+          return json({ ok: true, items: c.items.length, fetched_at: c.fetched_at }, 200);
+        } catch (e) {
+          // Never includes tokens: messages carry status codes and the server's error text only.
+          return json({
+            ok: false, code: e.code || "error", error: String(e.message || e).slice(0, 400),
+            configured: { client_id: !!env.QATOM_CLIENT_ID, refresh_token: !!env.QATOM_REFRESH_TOKEN, static_token: !!env.QATOM_MCP_TOKEN, kv: !!env.TOKENS },
+          }, 503);
+        }
       }
 
       if (path === "/llms.txt") {

@@ -433,6 +433,19 @@ await t("catalog pages past 500 items", async () => {
   assert.equal(state.catalogCalls - before, 3);
 });
 
+await t("health reports the cause as JSON when Qatom refuses", async () => {
+  const saved = state.rt; state.rt = "SOMETHING-ELSE"; state.at = "EXPIRED";
+  const kv = await mf.getKVNamespace("TOKENS"); await kv.delete("qatom-oauth");
+  const r = await get("/health?fresh");
+  const j = await r.json();
+  assert.equal(r.status, 503);
+  assert.equal(j.ok, false);
+  assert.match(j.error, /token refresh failed: HTTP 400 invalid_grant/);
+  assert.equal(j.configured.refresh_token, true);
+  assert.doesNotMatch(JSON.stringify(j), /RT\d|AT\d/); // no token values leak
+  state.rt = saved;
+});
+
 await t("health", async () => {
   const j = await (await get("/health")).json();
   assert.equal(j.ok, true);

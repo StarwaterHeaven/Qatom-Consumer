@@ -44,7 +44,7 @@ async function refresh(env, refreshToken) {
   const res = await fetch(TOKEN_URL, { method: "POST", headers, body });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.access_token) {
-    const err = new QatomError(`token refresh failed: ${res.status} ${data.error || ""}`, { status: 503, code: data.error || "refresh_failed" });
+    const err = new QatomError(`token refresh failed: HTTP ${res.status} ${data.error || ""} ${String(data.error_description || "").slice(0, 200)}`.trim(), { status: 503, code: data.error || "refresh_failed" });
     throw err;
   }
   return {
@@ -90,7 +90,7 @@ async function getAccessToken(env, { force = false } = {}) {
     }
   }
   if (env.QATOM_MCP_TOKEN) return env.QATOM_MCP_TOKEN;
-  throw lastErr || new QatomError("no usable refresh token", { status: 503, code: "refresh_failed" });
+  throw lastErr || new QatomError("no refresh token stored on the Worker yet (QATOM_REFRESH_TOKEN)", { status: 503, code: "not_configured" });
 }
 
 // ---------- MCP transport ----------
@@ -120,9 +120,9 @@ function headers(token, sid) {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
     authorization: `Bearer ${token}`,
-    "mcp-protocol-version": PROTOCOL,
   };
-  if (sid) h["mcp-session-id"] = sid;
+  // The protocol version is negotiated in the initialize body; send the header only after it.
+  if (sid) { h["mcp-session-id"] = sid; h["mcp-protocol-version"] = PROTOCOL; }
   return h;
 }
 
@@ -136,7 +136,7 @@ async function openSession(token) {
     }),
   });
   if (res.status === 401) throw new QatomError("unauthorized", { status: 401, code: "unauthorized" });
-  if (!res.ok) throw new QatomError(`initialize ${res.status}`);
+  if (!res.ok) throw new QatomError(`MCP initialize: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`.trim());
   const id = res.headers.get("mcp-session-id");
   const msg = await readRpc(res);
   if (msg.error) throw new QatomError(`initialize: ${msg.error.message || "error"}`);
@@ -156,7 +156,7 @@ async function rawCall(token, sid, name, args) {
   });
   if (res.status === 401) throw new QatomError("unauthorized", { status: 401, code: "unauthorized" });
   if (res.status === 404 || res.status === 400) throw new QatomError(`session ${res.status}`, { status: res.status, code: "session" });
-  if (!res.ok) throw new QatomError(`tools/call ${res.status}`);
+  if (!res.ok) throw new QatomError(`MCP tools/call ${name}: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`.trim());
   return readRpc(res);
 }
 
