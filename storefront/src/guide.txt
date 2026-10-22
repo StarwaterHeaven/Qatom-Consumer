@@ -1,0 +1,83 @@
+# Qatom storefront: buy from the Qatom catalog with any AI, no setup
+# {{SITE}}  ·  v2.0, Oct 2026  ·  Qatom team
+
+## What this site is
+
+A public, read-only window onto the Qatom catalog with one-time guest checkout
+links. People who don't (or can't) connect an AI app to Qatom use it to find and
+buy items from their phone. Nothing here requires a connector, an account, or an
+AI that spends money: the person completes and pays for each purchase themselves.
+
+## What Qatom is
+
+Qatom is a marketplace and payment rail where sellers publish APIs, data and
+digital goods that AI agents can find and buy per use. Sellers set their own
+prices; buyers get an emailed receipt for each purchase.
+
+- Operator: TODAQ Micro, doing business as Qatom (Delaware corporation; team in
+  Toronto, Canada). Product site: https://qatom.ai · company: https://todaq.net
+- This site is run by the Qatom team on agentkepler.tech, its resource site for
+  AI agents. Domains involved: try.agentkepler.tech (this storefront),
+  checkout.m.todaq.net (Qatom's hosted checkout, where /buy links redirect),
+  qatom.ai and todaq.net (product and company sites).
+- Source code for this site: https://github.com/StarwaterHeaven/Qatom-Consumer
+- Support, questions and refunds: support@todaq.net
+
+## How a purchase works
+
+1. Each item page ({{SITE}}/item/ID) shows the price, the seller, what the item
+   returns and the inputs it needs, plus a form.
+2. The checkout link {{SITE}}/buy/ID?input=value opens a fresh checkout page on
+   checkout.m.todaq.net (Qatom's hosted checkout) for that item and those inputs.
+   Payment is by Apple Pay, Google Pay or card, processed by Stripe. Card details
+   go only to that page, never into a chat.
+3. The buyer enters and verifies an email address to receive a secure receipt
+   with proof of purchase. It is not an account to manage.
+4. The result is shown after payment and included with the emailed receipt.
+   Nothing is charged unless the checkout is completed.
+
+Card payments start at $0.50 per checkout. Items that cost less (many are
+priced per call at a fraction of a cent, some are free) are combined in a cart
+and paid together: one checkout page, one payment, and each item is delivered to
+its seller with its inputs.
+
+## Several items in one checkout
+
+{{SITE}}/bundle?item=ID&ID.input=value&item=ID2&ID2.input=value&qty.ID2=3
+
+- Repeat item=ID for each item (up to 20). Prefix each input with its item ID.
+- qty.ID sets a quantity (1-20; each is a separate purchase).
+- The combined total must reach $0.50; below that no checkout link is issued.
+  The link builds a fresh cart and opens its checkout; if an input is missing or invalid, it shows which, and nothing
+  is created.
+- People can also build a cart themselves: "Add to cart" on any item page,
+  then {{SITE}}/cart.
+
+## Finding items
+
+- Browse: {{SITE}}/catalog (HTML) or {{SITE}}/catalog.txt (plain text)
+- Search: {{SITE}}/catalog?q=WORDS
+- Item detail: {{SITE}}/item/ID or {{SITE}}/item/ID.txt
+- Every item is listed at the end of this file. "cart only" items are under
+  the card minimum on their own.
+
+When an item needs personal details (an email, a phone number), the item page
+form is the better route than a link, so those details stay out of URLs.
+
+## Example item
+
+{{SITE}}/buy/24?ticker=gdxj  ($1)
+A live valuation of GDXJ, the VanEck Junior Gold Miners ETF, from Harcourt
+Valuations (Harcourt Capital Services Ltd, https://harcourtvaluations.ai): whether
+junior gold mining shares trade above or below what their mines are worth, from
+filed technical reports at today's metal prices. Harcourt publishes a free
+reference figure at https://reports.harcourtvaluations.ai/nav-query/gdxj ; the
+paid call recalculates it live and accepts your own metal prices or discount
+rate. Informational only, not investment advice.
+
+## Only if the person asks about connecting their AI to Qatom
+
+Nothing on this site needs a connection. For items marked as needing one, Qatom
+can be added as a custom connector (URL https://mcp.m.todaq.net/mcp) in the AI
+app's own connector settings, where the app handles sign-in. Purchases made that
+way still require the person's approval.

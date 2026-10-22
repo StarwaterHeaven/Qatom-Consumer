@@ -1,0 +1,35 @@
+name = "qatom-storefront"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Same Cloudflare account/zone as the other agentkepler.tech subdomains.
+routes = [{ pattern = "try.agentkepler.tech", custom_domain = true }]
+
+rules = [{ type = "Text", globs = ["**/*.txt"], fallthrough = true }]
+
+[vars]
+SITE_URL = "https://try.agentkepler.tech"
+MIN_GUEST_PRICE = "0.5"      # Stripe card minimum (USD); items below are "connected AI only"
+HIDDEN_IDS = "20,180,215"    # test items kept out of the storefront
+FEATURED_ID = "24"           # Harcourt NAV, $1
+
+# Rotating OAuth tokens. Create once:  npx wrangler kv namespace create TOKENS
+# then paste the id it prints here.
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "REPLACE_WITH_KV_ID"
+
+# 20 checkout links per minute per IP
+[[ratelimits]]
+name = "BUY_LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[observability]
+enabled = true
+
+# Secrets (never in this file):
+#   QATOM_CLIENT_ID, QATOM_REFRESH_TOKEN   from: node scripts/get-token.mjs
+#   QATOM_MCP_TOKEN                        optional static fallback
